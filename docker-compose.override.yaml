@@ -1,0 +1,27 @@
+services:
+  open-webui:
+    environment:
+      WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY}
+      ENABLE_OLLAMA_API: "False"
+      OLLAMA_BASE_URLS: ""
+      TOOL_SERVER_CONNECTIONS: >
+        [
+          {
+            "url": "http://host.docker.internal:8811/mcp",
+            "path": "",
+            "type": "mcp",
+            "auth_type": "bearer",
+            "key": "${MCP_GATEWAY_AUTH_TOKEN}",
+            "headers": {},
+            "config": {
+              "enable": true,
+              "function_name_filter_list": "",
+              "access_grants": []
+            },
+            "info": {
+              "id": "docker-mcp",
+              "name": "Docker MCP",
+              "description": "Docker MCP Gateway exposing enabled Docker MCP servers"
+            }
+          }
+        ]

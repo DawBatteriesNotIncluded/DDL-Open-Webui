@@ -1,0 +1,21 @@
+[
+  {
+    "type": "mcp",
+    "url": "http://host.docker.internal:8812/mcp",
+    "spec_type": "url",
+    "spec": "",
+    "path": "",
+    "auth_type": "bearer",
+    "headers": {},
+    "key": "${N8N_MCP_AUTH_TOKEN}",
+    "config": {
+      "enable": true,
+      "access_grants": []
+    },
+    "info": {
+      "id": "n8n-direct",
+      "name": "n8n Direct MCP",
+      "description": "Direct HTTP MCP server from the mcp/n8n Docker image"
+    }
+  }
+]

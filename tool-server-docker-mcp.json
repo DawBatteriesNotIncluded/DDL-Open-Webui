@@ -1,0 +1,21 @@
+[
+  {
+    "type": "mcp",
+    "url": "http://host.docker.internal:8811/mcp",
+    "spec_type": "url",
+    "spec": "",
+    "path": "",
+    "auth_type": "bearer",
+    "headers": {},
+    "key": "${MCP_GATEWAY_AUTH_TOKEN}",
+    "config": {
+      "enable": true,
+      "access_grants": []
+    },
+    "info": {
+      "id": "docker-mcp",
+      "name": "Docker MCP",
+      "description": "Docker MCP Gateway exposing enabled Docker MCP servers"
+    }
+  }
+]

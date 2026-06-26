@@ -1,0 +1,21 @@
+[
+    {
+        "type": "mcp",
+        "url": "http://host.docker.internal:3001/mcp",
+        "spec_type": "url",
+        "spec": "",
+        "path": "",
+        "auth_type": "bearer",
+        "headers": {},
+        "key": "${N8N_MCP_AUTH_TOKEN}",
+        "config": {
+            "enable": true,
+            "access_grants": []
+        },
+        "info": {
+            "id": "n8n-mcp",
+            "name": "n8n MCP",
+            "description": "n8n MCP server connected to n8n"
+        }
+    }
+]
