@@ -2,6 +2,8 @@
 
 Copy this folder to `clients/<client-slug>/` for a real client.
 
+Use `../onboarding.md` for the first-client checklist.
+
 ## File Map
 
 | File | Purpose |

@@ -1,0 +1,20 @@
+{
+  "payload_name": "airops-enrichment-response-fake",
+  "sensitivity": "fake",
+  "purpose": "Validate expected AirOps enrichment output shape.",
+  "source_system": "AirOps",
+  "target_system": "n8n or Open WebUI",
+  "response": {
+    "summary": "Example Robotics appears interested in CRM write-back controls and integration delivery timing.",
+    "confirmed_facts": [
+      "Account name was provided in the request.",
+      "Recent signal was provided in the request."
+    ],
+    "unknowns": [
+      "No verified employee count source attached.",
+      "No confirmed CRM owner attached."
+    ],
+    "recommended_next_action": "Ask RevOps owner to confirm approved CRM write-back fields before build."
+  },
+  "approval_required_before_external_use": true
+}

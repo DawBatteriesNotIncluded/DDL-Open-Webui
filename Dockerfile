@@ -180,6 +180,7 @@ RUN if [ "$USE_OLLAMA" = "true" ]; then \
 COPY --chown=$UID:$GID --from=build /app/build /app/build
 COPY --chown=$UID:$GID --from=build /app/CHANGELOG.md /app/CHANGELOG.md
 COPY --chown=$UID:$GID --from=build /app/package.json /app/package.json
+COPY --chown=$UID:$GID ./gtm-loop-workspace /app/gtm-loop-workspace
 
 # copy backend files
 COPY --chown=$UID:$GID ./backend .

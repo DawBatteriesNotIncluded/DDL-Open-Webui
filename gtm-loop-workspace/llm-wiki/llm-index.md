@@ -6,6 +6,10 @@ Agent-readable entry point for the GTM Loop workspace.
 
 | Need | Start Here |
 | --- | --- |
+| Daily dashboard | `../HOME.md` |
+| Orchestrator state and loop control | `../orchestrator/state.md` |
+| Board transition rules | `../orchestrator/transition-rules.md` |
+| Update ownership rules | `../UPDATE-OWNERSHIP.md` |
 | Current client and priority | `current-client.md` |
 | Shared operating context | `shared-context.md` |
 | System and integration map | `systems-map.md` |
@@ -17,6 +21,8 @@ Agent-readable entry point for the GTM Loop workspace.
 ## Working Rule
 
 Client-specific detail belongs in `clients/<client-slug>/`. Only promote durable context into `llm-wiki/` when future agents should read it before work.
+
+`llm-wiki/` does not own daily status, board cards, run history, or tool permissions. Use `../UPDATE-OWNERSHIP.md` when unsure.
 
 ## Evidence Labels
 

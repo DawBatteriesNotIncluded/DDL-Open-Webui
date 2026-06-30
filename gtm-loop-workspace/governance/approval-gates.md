@@ -51,3 +51,16 @@ Reply with explicit approval for this exact action.
 ## Rule
 
 If the approval scope is ambiguous, do not act. Prepare the approval request instead.
+
+## Do Not Automate Yet
+
+These stay manual and approval-gated for v1:
+
+- API writes or production data mutation.
+- Workflow activation, deactivation, or production retry.
+- Email sends or external messages.
+- Credential, token, scope, or API key changes.
+- Bulk imports, deletes, merges, or destructive operations.
+- Uploading raw customer exports, Gong transcripts, logs, secrets, endpoint hosts, tenant IDs, or auth headers to Knowledge.
+
+Agents may draft plans, payloads, approval requests, and validation notes for these actions, but must not execute them without explicit approval for the exact action.

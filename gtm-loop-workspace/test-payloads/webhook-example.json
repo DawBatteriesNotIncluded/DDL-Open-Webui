@@ -1,0 +1,14 @@
+{
+  "webhookId": "wh_fake_9001",
+  "receivedAt": "2026-01-18T14:00:00Z",
+  "source": "manual-test",
+  "eventType": "gtm.signal.detected",
+  "payload": {
+    "companyName": "Example BioSystems",
+    "companyDomain": "examplebiosystems.test",
+    "signalType": "competitor_mention",
+    "summary": "Buyer mentioned dissatisfaction with a competitor during a discovery call.",
+    "confidence": 0.72
+  }
+}
+

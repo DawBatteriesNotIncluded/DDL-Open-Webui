@@ -4,27 +4,75 @@ Minimal setup for using this repo as an automation AI workbench.
 
 ## Knowledge To Attach
 
-Attach these first:
+Use `openwebui-knowledge-packs.md` for exact bundles. Attach the Core Pack first:
 
 - `gtm-loop-workspace/README.md`
 - `gtm-loop-workspace/AGENTS.md`
 - `gtm-loop-workspace/HOME.md`
+- `gtm-loop-workspace/UPDATE-OWNERSHIP.md`
 - `gtm-loop-workspace/workbench.md`
+- `gtm-loop-workspace/orchestrator/`
+- `gtm-loop-workspace/schemas/board-card.md`
 - `gtm-loop-workspace/board.md`
 - `gtm-loop-workspace/llm-wiki/`
 - `gtm-loop-workspace/workflows/`
 - `gtm-loop-workspace/clients/_template/`
 - `gtm-loop-workspace/tools/tool-registry.md`
 - `gtm-loop-workspace/governance/approval-gates.md`
+- `gtm-loop-workspace/runs/_template.md`
 - `gtm-loop-workspace/evals/gtm-loop-evals.md`
+- `gtm-loop-workspace/openwebui-knowledge-packs.md`
 
 ## Primary Agent
 
-Create one custom Open WebUI model from:
+Import the ready Workstation Agent file first:
 
-- `gtm-loop-workspace/agents/loop-engineering-workstation-agent.md`
+- `gtm-loop-workspace/imports/openwebui-workstation-agent.gpt-5.4.json`
+
+If your base model is not `gpt-5.4`, use:
+
+- `gtm-loop-workspace/imports/openwebui-workstation-agent.import.json`
+
+and replace `__BASE_MODEL_ID__` with an existing Open WebUI model id.
 
 Use this as the default cockpit agent for daily loop engineering.
+
+Attach the Core Pack from `openwebui-knowledge-packs.md`.
+
+## Local Docker Runtime
+
+Verified local test URL:
+
+```text
+http://localhost:3000
+```
+
+The GTM Loop route is available at:
+
+```text
+http://localhost:3000/gtm-loop
+```
+
+The read-only GTM Loop Kanban board is available at:
+
+```text
+http://localhost:3000/gtm-loop/board
+```
+
+`/gtm-loop` is the cockpit dashboard. `/gtm-loop/board` is a read-only visual board over `gtm-loop-workspace/tasks/*.md`; task files remain the source of truth. Board search and filters are client-side only over the task list returned by `GET /api/gtm-loop/tasks`.
+
+Use the existing compose stack:
+
+```powershell
+docker compose ps
+docker compose up -d
+docker compose restart open-webui
+docker compose stop open-webui
+```
+
+Local development uses `docker-compose.override.yaml` to mount `./gtm-loop-workspace` into the container at `/app/gtm-loop-workspace` as read-only. That means edits to `tasks/*.md` on the host appear in `/gtm-loop/board` after refresh, without rebuilding the image. Production/image-only runs can still use the workspace copied by the `Dockerfile` when the override is not applied.
+
+Do not run the setup import scripts with real credentials. For v1, keep HubSpot, Gong, AirOps, n8n writes, workflow activation, and external API writes disabled.
 
 ## Specialist Agents
 
@@ -45,8 +93,43 @@ Start with Knowledge-only. Add n8n, HubSpot, Gong, AirOps, API, or repo tools on
 
 ## First Run
 
-1. Open `workbench.md`.
-2. Set active client.
-3. Pick one board card.
-4. Run the Loop Engineering Workstation Agent.
-5. Log the result in `runs/index.md`.
+1. Open `HOME.md`.
+2. Read `orchestrator/state.md` and `orchestrator/loop-constraints.md`.
+3. Run `node scripts\validate-gtm-tasks.js`; the board should be trusted only when validation passes.
+4. Open `http://localhost:3000/gtm-loop` for the cockpit or `/gtm-loop/board` for the read-only board.
+5. Set active client in `workbench.md` and `llm-wiki/current-client.md`.
+6. Pick one structured task file under `tasks/`.
+7. Create or resume a run from `runs/_template.md`.
+8. Run the Loop Engineering Workstation Agent.
+9. Log the result in `runs/index.md`.
+
+Editing cards, moving cards, and writing task state from the UI are intentionally deferred.
+
+## Manual UI Smoke Test
+
+1. Open `http://localhost:3000/gtm-loop` while logged in.
+2. Open `http://localhost:3000/gtm-loop/board`.
+3. Confirm the board status panel says `API: loaded`.
+4. Confirm task count is `11`.
+5. Confirm Planned, In Progress, Smoke Test, In Review, and Done columns render.
+6. Search for a task id or client and confirm only matching cards remain.
+7. Try quick filters: `Blocked`, `Approval Required`, `Rework Needed`, `In Review`, and `Smoke Test`; confirm non-matching cards are hidden.
+8. Clear filters and confirm all cards return.
+9. Make a harmless local edit to one task `next_action` in `gtm-loop-workspace/tasks/`.
+10. Refresh `/gtm-loop/board` and confirm the edit appears.
+11. Revert the test edit.
+12. Run `node scripts\validate-gtm-tasks.js`.
+
+If the status panel says `unauthorized`, log in to Open WebUI and refresh. The GTM task API is intentionally authenticated.
+
+## API Setup Option
+
+If local Open WebUI is running and you have an API token:
+
+```powershell
+$env:OPENWEBUI_URL="http://localhost:3000"
+$env:OPENWEBUI_API_KEY="PASTE_TOKEN_HERE"
+powershell -NoProfile -ExecutionPolicy Bypass -File .\gtm-loop-workspace\imports\setup-openwebui-workspace.ps1
+```
+
+This imports the Workstation Agent, creates/reuses Knowledge collections from `imports/openwebui-workspace-manifest.json`, uploads the Core Pack files, and attaches the Core Pack to the agent.

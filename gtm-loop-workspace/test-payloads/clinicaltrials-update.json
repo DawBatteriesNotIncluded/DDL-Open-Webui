@@ -1,0 +1,14 @@
+{
+  "updateId": "ct_fake_5001",
+  "source": "clinicaltrials.gov",
+  "detectedAt": "2026-01-17T08:00:00Z",
+  "nctId": "NCT00000000",
+  "studyTitle": "An anonymised phase two study for workflow testing",
+  "sponsor": "Example BioSystems",
+  "status": "Recruiting",
+  "condition": "Anonymised condition",
+  "phase": "Phase 2",
+  "locationsChanged": true,
+  "enrollment": 120
+}
+

@@ -1,0 +1,16 @@
+{
+  "eventId": "evt_fake_001",
+  "subscriptionType": "contact.creation",
+  "occurredAt": "2026-01-15T10:30:00Z",
+  "portalId": 12345678,
+  "objectId": "contact_fake_1001",
+  "properties": {
+    "email": "alex.rivera@example.test",
+    "firstname": "Alex",
+    "lastname": "Rivera",
+    "company": "Example BioSystems",
+    "jobtitle": "VP Clinical Operations",
+    "lifecyclestage": "lead"
+  }
+}
+

@@ -1,0 +1,13 @@
+{
+  "requestId": "req_fake_8001",
+  "service": "example-crm",
+  "endpoint": "/crm/v3/objects/tasks",
+  "method": "POST",
+  "status": 429,
+  "error": {
+    "code": "RATE_LIMIT_EXCEEDED",
+    "message": "Too many requests for this app token.",
+    "retryAfterSeconds": 30
+  }
+}
+

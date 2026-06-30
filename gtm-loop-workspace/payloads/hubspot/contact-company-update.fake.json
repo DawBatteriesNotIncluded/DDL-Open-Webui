@@ -1,0 +1,28 @@
+{
+  "payload_name": "hubspot-contact-company-update-fake",
+  "sensitivity": "fake",
+  "purpose": "Validate contact and company field mapping without using real CRM data.",
+  "source_system": "n8n",
+  "target_system": "HubSpot",
+  "approval_required_before_write": true,
+  "contact": {
+    "email": "alex.example@example.test",
+    "firstname": "Alex",
+    "lastname": "Example",
+    "jobtitle": "VP Revenue",
+    "lifecyclestage": "salesqualifiedlead",
+    "associatedcompanyid": "fake-company-001"
+  },
+  "company": {
+    "name": "Example Robotics Ltd",
+    "domain": "example-robotics.test",
+    "industry": "Manufacturing",
+    "numberofemployees": 250,
+    "custom_account_signal": "fake_high_intent"
+  },
+  "expected_result": {
+    "contact_match_rule": "email",
+    "company_match_rule": "domain",
+    "write_mode": "dry-run or approval-gated update"
+  }
+}

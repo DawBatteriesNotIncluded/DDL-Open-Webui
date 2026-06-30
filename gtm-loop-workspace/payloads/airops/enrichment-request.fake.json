@@ -1,0 +1,20 @@
+{
+  "payload_name": "airops-enrichment-request-fake",
+  "sensitivity": "fake",
+  "purpose": "Validate AirOps enrichment prompt-chain input.",
+  "source_system": "n8n",
+  "target_system": "AirOps",
+  "request": {
+    "account_name": "Example Robotics Ltd",
+    "website": "https://example-robotics.test",
+    "industry": "Manufacturing",
+    "recent_signal": "Asked about CRM write-back controls on a sales call.",
+    "desired_output": "seller_brief",
+    "tone": "concise"
+  },
+  "constraints": {
+    "do_not_invent_facts": true,
+    "mark_unknowns": true,
+    "external_publish_allowed": false
+  }
+}

@@ -19,25 +19,30 @@ Library for fake or redacted payloads used in workflow design, validation, and d
 | `airops/` | Prompt-chain input/output examples. |
 | `api/` | Custom API request/response examples. |
 
+## Starter Payloads
+
+| Payload | Use |
+| --- | --- |
+| `hubspot/contact-company-update.fake.json` | Fake HubSpot contact/company update mapping. |
+| `gong/call-transcript-event.fake.json` | Fake/redacted Gong call event and signal extraction. |
+| `n8n/webhook-input.fake.json` | Fake n8n webhook trigger input. |
+| `airops/enrichment-request.fake.json` | Fake AirOps enrichment request. |
+| `airops/enrichment-response.fake.json` | Fake AirOps enrichment response. |
+| `api/custom-webhook.fake.json` | Fake custom API webhook input. |
+
 ## Payload Card Template
 
-```markdown
-# Payload: <name>
+Use this shape in a short Markdown note if a payload needs explanation beyond the JSON file:
 
-| Field | Value |
-| --- | --- |
-| System | `TBD` |
-| Purpose | `TBD` |
-| Workflow | `TBD` |
-| Sensitivity | Fake / Redacted |
-| Expected Result | `TBD` |
+- Payload: `<name>`
+- System: `TBD`
+- Purpose: `TBD`
+- Workflow: `TBD`
+- Sensitivity: Fake / Redacted
+- Expected result: `TBD`
+- JSON file: `payloads/<system>/<name>.fake.json`
 
-## Payload
-
-```json
-{}
-```
-```
+Keep the actual payload in a `.fake.json` file.
 
 ## Existing Samples
 

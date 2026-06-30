@@ -1,105 +1,101 @@
 # GTM Loop Board
 
-Plain Markdown Kanban board for client investigations, research, designs, builds, validations, and follow-ups.
+Manager-facing mirror of `tasks/*.md`. The task files are the source of truth; update the task first, then update this board summary.
 
-Move cards between sections. Keep each card linked to the source file that owns the real detail.
+Task schema: `schemas/task-card.md`
+Transition rules: `orchestrator/transition-rules.md`
 
-## Backlog
+## Planned
 
-- [ ] Review HOME dashboard at start of day
-  - Type: daily control
-  - Link: `HOME.md`
-  - Next: set active client, active card, and next action
+- [GTM-001](tasks/GTM-001.md) - Onboard first real client
+  - Client: TBD
+  - Lane: Brody
+  - Status: Planned
+  - Blocked: yes
+  - Next action: Manager provides client name and initial automation objective.
 
-- [ ] Fill workbench manifest for first real client
-  - Type: workbench setup
-  - Link: `workbench.md`
-  - Next: set active client, stage, and active board card
+- [GTM-003](tasks/GTM-003.md) - Confirm tool permissions
+  - Client: Global
+  - Lane: Brody
+  - Status: Planned
+  - Blocked: yes
+  - Next action: Confirm which integration surfaces are read-only, draft-only, approval-gated, deferred, or disabled.
 
-- [ ] Configure Loop Engineering Workstation Agent in Open WebUI
-  - Type: agent setup
-  - Link: `openwebui-setup.md`
-  - Next: create custom model and attach workspace Knowledge
+- [GTM-004](tasks/GTM-004.md) - Identify first automation candidate
+  - Client: TBD
+  - Lane: Brody
+  - Status: Planned
+  - Blocked: yes
+  - Next action: Capture current manual workflow and open questions.
 
-- [ ] Define initial tool registry and approval gates
-  - Type: governance
-  - Link: `tools/tool-registry.md`
-  - Next: mark n8n, HubSpot, Gong, AirOps, and API access levels
+- [GTM-005](tasks/GTM-005.md) - Draft first architecture-to-build pack
+  - Client: TBD
+  - Lane: Archy
+  - Status: Planned
+  - Blocked: yes
+  - Next action: Map systems, boundaries, flow, risks, and build handoff.
 
-- [ ] Create first real client folder from `clients/_template/`
-  - Type: client setup
-  - Link: `clients/_template/README.md`
-  - Next: choose client slug and fill `context.md`
+- [GTM-006](tasks/GTM-006.md) - Prepare first build handoff
+  - Client: TBD
+  - Lane: Cody
+  - Status: Planned
+  - Blocked: yes
+  - Next action: Add confirmed requirements and acceptance checks.
 
-- [ ] Pick first automation candidate
-  - Type: discovery
-  - Link: `llm-wiki/current-client.md`
-  - Next: capture objective, systems, and owner
+- [GTM-007](tasks/GTM-007.md) - Validate first workflow with fake payloads
+  - Client: TBD
+  - Lane: Verifier
+  - Status: Planned
+  - Blocked: yes
+  - Next action: Pick one fake payload and record expected output.
 
-## Investigating
+## In Progress
 
-- [ ] Confirm active client systems
-  - Type: investigation
-  - Link: `clients/_template/systems.md`
-  - Evidence target: HubSpot, Gong, AirOps, n8n, custom APIs, repos
+_No active tasks._
 
-- [ ] Run first issue through Solve Issue workflow
-  - Type: issue
-  - Link: `workflows/solve-issue.md`
-  - Next: capture symptom, impact, evidence, and likely owner
+## Smoke Test
 
-## Designing
+_No active tasks._
 
-- [ ] Draft first workflow inventory row
-  - Type: design
-  - Link: `clients/_template/workflow-inventory.md`
-  - Next: define trigger, inputs, outputs, runtime, owner
+## In Review
 
-- [ ] Add first automation to workflow registry
-  - Type: registry
-  - Link: `workflows/registry.md`
-  - Next: record runtime, trigger, status, owner, approval gate
-
-- [ ] Create first architecture-to-build pack
-  - Type: architecture
-  - Link: `workflows/architecture-to-build.md`
-  - Next: map systems, boundaries, flow, risks, and handoff
-
-## Building
-
-- [ ] Prepare first build handoff
-  - Type: build handoff
-  - Link: `clients/_template/build-handoff.md`
-  - Next: add confirmed requirements and acceptance checks
-
-## Validating
-
-- [ ] Create fake/redacted validation payload
-  - Type: validation
-  - Link: `payloads/README.md`
-  - Next: record expected output and approval gate
-
-- [ ] Run GTM loop evals on first workflow
-  - Type: eval
-  - Link: `evals/gtm-loop-evals.md`
-  - Next: check grounding, safety, build readiness, validation
-
-## Blocked
-
-- [ ] Confirm which client is active
-  - Type: owner question
-  - Link: `llm-wiki/current-client.md`
-  - Blocker: client name and initial objective needed
+_No active tasks._
 
 ## Done
 
-- [x] Create lean GTM Loop Markdown workspace
-  - Type: workspace setup
-  - Link: `README.md`
+- [GTM-011](tasks/GTM-011.md) - Verify local Docker test runtime
+  - Client: Global
+  - Lane: Reporter
+  - Status: Done
+  - Blocked: no
+  - Next action: Open `http://localhost:3000/gtm-loop` and complete manual Open WebUI agent/Knowledge setup if needed.
 
-## Card Rules
+- [GTM-010](tasks/GTM-010.md) - Add report-only orchestrator spine
+  - Client: Global
+  - Lane: Reporter
+  - Status: Done
+  - Blocked: no
+  - Next action: Use `GTM-001` to onboard the first real client.
 
-- One card equals one outcome.
-- Link to the owning file instead of duplicating detail.
-- Use `Blocked` only when the next action needs access, owner input, or a decision.
-- Move finished cards to `Done`; keep the proof in the linked file.
+- [GTM-009](tasks/GTM-009.md) - Add Open WebUI GTM Loop UI surface
+  - Client: Global
+  - Lane: Reporter
+  - Status: Done
+  - Blocked: no
+  - Next action: Open `http://localhost:3000/gtm-loop` or use the sidebar `GTM Loop` link.
+
+- [GTM-002](tasks/GTM-002.md) - Configure Open WebUI Workstation Agent and Core Pack
+  - Client: Global
+  - Lane: Reporter
+  - Status: Done
+  - Blocked: no
+  - Next action: Verify in Open WebUI, then use `GTM-001` for first-client onboarding.
+
+- [GTM-000](tasks/GTM-000.md) - Create lean GTM Loop Markdown workspace
+  - Client: Global
+  - Lane: Reporter
+  - Status: Done
+  - Blocked: no
+  - Next action: None.
+
+Board rules: `tasks/*.md` is canonical; `board.md` is a short manager-facing mirror. Columns stay limited to Planned, In Progress, Smoke Test, In Review, and Done. `blocked`, `approval_required`, and `rework_needed` are task flags, not columns.

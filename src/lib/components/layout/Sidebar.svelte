@@ -72,6 +72,7 @@
 	import PinnedModelList from './Sidebar/PinnedModelList.svelte';
 	import Note from '../icons/Note.svelte';
 	import Code from '../icons/Code.svelte';
+	import Map from '../icons/Map.svelte';
 	import { slide } from 'svelte/transition';
 	import HotkeyHint from '../common/HotkeyHint.svelte';
 
@@ -857,6 +858,27 @@
 					</Tooltip>
 				</div>
 
+				<div>
+					<Tooltip content={$i18n.t('GTM Loop')} placement="right">
+						<a
+							class=" cursor-pointer flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
+							href="/gtm-loop"
+							on:click={async (e) => {
+								e.stopImmediatePropagation();
+								e.preventDefault();
+								goto('/gtm-loop');
+								itemClickHandler();
+							}}
+							draggable="false"
+							aria-label={$i18n.t('GTM Loop')}
+						>
+							<div class=" self-center flex items-center justify-center size-9">
+								<Map className="size-4.5" />
+							</div>
+						</a>
+					</Tooltip>
+				</div>
+
 				{#each pinnedItems as itemId (itemId)}
 					{@const meta = getMenuItemMeta(itemId)}
 					{#if meta && isMenuItemVisible(itemId)}
@@ -1105,6 +1127,25 @@
 							</div>
 							<HotkeyHint name="search" className=" group-hover:visible invisible" />
 						</button>
+					</div>
+
+					<div class="px-[0.4375rem] flex justify-center text-gray-800 dark:text-gray-200">
+						<a
+							id="sidebar-gtm-loop-button"
+							class="grow flex items-center space-x-3 rounded-2xl px-2.5 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition"
+							href="/gtm-loop"
+							on:click={itemClickHandler}
+							draggable="false"
+							aria-label={$i18n.t('GTM Loop')}
+						>
+							<div class="self-center">
+								<Map className="size-4.5" strokeWidth="2" />
+							</div>
+
+							<div class="flex flex-1 self-center translate-y-[0.5px]">
+								<div class=" self-center text-sm font-primary">{$i18n.t('GTM Loop')}</div>
+							</div>
+						</a>
 					</div>
 
 					<div id="pinned-menu-items-list">

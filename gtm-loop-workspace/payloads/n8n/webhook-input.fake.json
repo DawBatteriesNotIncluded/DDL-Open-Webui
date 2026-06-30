@@ -1,0 +1,26 @@
+{
+  "payload_name": "n8n-webhook-input-fake",
+  "sensitivity": "fake",
+  "purpose": "Validate webhook trigger shape and routing.",
+  "source_system": "HubSpot webhook or manual test",
+  "target_system": "n8n",
+  "event": {
+    "event_id": "fake-event-001",
+    "event_type": "deal.stage_changed",
+    "occurred_at": "2026-01-15T15:30:00Z",
+    "object_type": "deal",
+    "object_id": "fake-deal-001",
+    "property_name": "dealstage",
+    "old_value": "qualifiedtobuy",
+    "new_value": "presentationscheduled"
+  },
+  "context": {
+    "client_slug": "example-client",
+    "dry_run": true,
+    "correlation_id": "fake-correlation-001"
+  },
+  "expected_result": {
+    "workflow_branch": "deal-brief-prep",
+    "external_writes_allowed": false
+  }
+}

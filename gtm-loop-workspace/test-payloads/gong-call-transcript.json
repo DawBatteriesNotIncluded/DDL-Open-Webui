@@ -1,0 +1,33 @@
+{
+  "callId": "call_fake_3001",
+  "title": "Example BioSystems discovery call",
+  "startedAt": "2026-01-14T15:00:00Z",
+  "durationSeconds": 2620,
+  "participants": [
+    {
+      "name": "Jordan Seller",
+      "role": "seller",
+      "email": "jordan.seller@example.test"
+    },
+    {
+      "name": "Taylor Buyer",
+      "role": "buyer",
+      "email": "taylor.buyer@example.test"
+    }
+  ],
+  "transcript": [
+    {
+      "speaker": "Taylor Buyer",
+      "text": "We need better visibility into site activation delays before our next phase two study."
+    },
+    {
+      "speaker": "Jordan Seller",
+      "text": "What systems are you using today to track those delays?"
+    },
+    {
+      "speaker": "Taylor Buyer",
+      "text": "Mostly spreadsheets and a competitor dashboard, but neither gives us a clean leadership view."
+    }
+  ]
+}
+

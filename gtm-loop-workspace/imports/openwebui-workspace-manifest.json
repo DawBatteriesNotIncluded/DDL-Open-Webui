@@ -1,0 +1,234 @@
+{
+  "name": "GTM Loop Workspace",
+  "version": "1.2.0",
+  "created_for": "Open WebUI personal GTM/FDE loop-engineering cockpit",
+  "scope": "Personal workspace only. No Open WebUI core modifications.",
+  "models_import_template": "imports/openwebui-models-import.json",
+  "models_import_ready_file": "imports/openwebui-models-import.gpt-5.4.unique.json",
+  "workstation_model_import_template": "imports/openwebui-workstation-agent.import.json",
+  "workstation_model_import_ready_file": "imports/openwebui-workstation-agent.gpt-5.4.json",
+  "models_import_ready_file_original_ids": "imports/openwebui-models-import.gpt-5.4.json",
+  "models_import_generator": "imports/create-openwebui-model-import.ps1",
+  "models_import_generated_file": "imports/openwebui-models-import.generated.json",
+  "knowledge_upload_groups": [
+    {
+      "collection_name": "GTM Workbench Core Pack",
+      "files": [
+        "README.md",
+        "AGENTS.md",
+        "HOME.md",
+        "UPDATE-OWNERSHIP.md",
+        "workbench.md",
+        "orchestrator/README.md",
+        "orchestrator/state.md",
+        "orchestrator/loop-constraints.md",
+        "orchestrator/transition-rules.md",
+        "orchestrator/agent-routing.md",
+        "schemas/board-card.md",
+        "board.md",
+        "openwebui-setup.md",
+        "openwebui-knowledge-packs.md",
+        "llm-wiki/llm-index.md",
+        "llm-wiki/current-client.md",
+        "llm-wiki/shared-context.md",
+        "llm-wiki/systems-map.md",
+        "llm-wiki/open-questions.md",
+        "llm-wiki/automation-patterns.md",
+        "tools/tool-registry.md",
+        "governance/approval-gates.md",
+        "workflows/daily-operating-loop.md",
+        "workflows/investigate.md",
+        "workflows/solve-issue.md",
+        "workflows/design.md",
+        "workflows/architecture-to-build.md",
+        "workflows/build.md",
+        "workflows/validate.md",
+        "workflows/registry.md",
+        "clients/onboarding.md",
+        "clients/_template/README.md",
+        "payloads/README.md",
+        "evals/gtm-loop-evals.md",
+        "runs/_template.md",
+        "runs/index.md"
+      ]
+    },
+    {
+      "collection_name": "GTM Loop Operating System",
+      "files": [
+        "README.md",
+        "knowledge/gtm-playbook.md",
+        "knowledge/loop-engineering-notes.md",
+        "knowledge/debugging-notes.md",
+        "docs/openwebui-loop-engineering-setup.md",
+        "docs/security-and-secrets.md"
+      ]
+    },
+    {
+      "collection_name": "GTM Loop Specs",
+      "files": [
+        "loops/README.md",
+        "loops/INDEX.md",
+        "loops/loop-spec-template.md",
+        "loops/buying-signal-loop.md",
+        "loops/gong-to-deal-brief-loop.md",
+        "loops/workflow-debugging-loop.md",
+        "loops/clinicaltrials-signal-loop.md",
+        "loops/competitor-intelligence-loop.md",
+        "loops/qbr-prep-loop.md",
+        "loops/proposal-generation-loop.md",
+        "loops/content-repurposing-loop.md",
+        "loops/automation-backlog-loop.md"
+      ]
+    },
+    {
+      "collection_name": "GTM Build System",
+      "files": [
+        "build-system/README.md",
+        "build-system/build-process.md",
+        "build-system/loop-to-n8n-build-pipeline.md",
+        "build-system/n8n-workflow-json-rules.md",
+        "build-system/workflow-import-checklist.md",
+        "build-system/workflow-test-runbook.md",
+        "build-system/human-approval-gates.md",
+        "build-system/build-status-template.md",
+        "build-system/automation-backlog.md"
+      ]
+    },
+    {
+      "collection_name": "GTM Integration Notes",
+      "files": [
+        "knowledge/n8n-notes.md",
+        "knowledge/hubspot-notes.md",
+        "knowledge/gong-notes.md",
+        "knowledge/evergrowth-notes.md",
+        "knowledge/airops-notes.md",
+        "knowledge/api-integration-notes.md",
+        "knowledge/prompt-engineering-notes.md"
+      ]
+    },
+    {
+      "collection_name": "GTM Workflow Templates",
+      "files": [
+        "workflow-templates/README.md",
+        "workflow-templates/buying-signal-to-hubspot-task.md",
+        "workflow-templates/gong-call-to-deal-brief.md",
+        "workflow-templates/failed-n8n-execution-debugger.md",
+        "workflow-templates/clinicaltrials-update-to-account-alert.md",
+        "workflow-templates/competitor-mention-to-leadership-brief.md",
+        "workflow-templates/qbr-prep-workflow.md",
+        "workflow-templates/proposal-skeleton-generator.md",
+        "workflow-templates/content-repurposing-pipeline.md"
+      ]
+    },
+    {
+      "collection_name": "GTM Prompts And Evals",
+      "files": [
+        "prompts/README.md",
+        "prompts/loop-spec-generation-prompt.md",
+        "prompts/n8n-workflow-generation-prompt.md",
+        "prompts/n8n-debugging-prompt.md",
+        "prompts/api-integration-analysis-prompt.md",
+        "prompts/gtm-signal-scoring-prompt.md",
+        "prompts/seller-brief-generation-prompt.md",
+        "prompts/gong-transcript-analysis-prompt.md",
+        "prompts/proposal-generation-prompt.md",
+        "prompts/eval-checker-prompt.md",
+        "evals/README.md",
+        "evals/loop-quality-scorecard.md",
+        "evals/workflow-readiness-checklist.md",
+        "evals/hallucination-and-grounding-checklist.md",
+        "evals/security-review-checklist.md",
+        "evals/data-privacy-checklist.md",
+        "evals/n8n-workflow-test-checklist.md"
+      ]
+    }
+  ],
+  "primary_agents": [
+    {
+      "model_id": "gtm-loop-v1-workstation-agent",
+      "display_name": "GTM Loop Workstation Agent",
+      "source_file": "agents/loop-engineering-workstation-agent.md",
+      "import_file": "imports/openwebui-workstation-agent.gpt-5.4.json",
+      "recommended_knowledge": [
+        "GTM Workbench Core Pack"
+      ],
+      "n8n_mcp": "off_for_v1"
+    },
+    {
+      "model_id": "gtm-loop-architect-agent",
+      "display_name": "GTM Loop Architect Agent",
+      "source_file": "agents/loop-architect-agent.md",
+      "recommended_knowledge": [
+        "GTM Loop Operating System",
+        "GTM Loop Specs",
+        "GTM Build System",
+        "GTM Integration Notes",
+        "GTM Workflow Templates",
+        "GTM Prompts And Evals"
+      ],
+      "n8n_mcp": "optional_inspection_only"
+    },
+    {
+      "model_id": "gtm-build-controller-agent",
+      "display_name": "GTM Build Controller Agent",
+      "source_file": "agents/build-controller-agent.md",
+      "recommended_knowledge": [
+        "GTM Loop Operating System",
+        "GTM Build System",
+        "GTM Loop Specs",
+        "GTM Integration Notes",
+        "GTM Prompts And Evals"
+      ],
+      "n8n_mcp": "recommended_controlled"
+    },
+    {
+      "model_id": "gtm-flow-builder-agent",
+      "display_name": "GTM Flow Builder Agent",
+      "source_file": "agents/gtm-flow-builder-agent.md",
+      "recommended_knowledge": [
+        "GTM Build System",
+        "GTM Integration Notes",
+        "GTM Workflow Templates",
+        "GTM Loop Specs"
+      ],
+      "n8n_mcp": "recommended_controlled"
+    },
+    {
+      "model_id": "gtm-workflow-debugger-agent",
+      "display_name": "GTM Workflow Debugger Agent",
+      "source_file": "agents/workflow-debugger-agent.md",
+      "recommended_knowledge": [
+        "GTM Build System",
+        "GTM Integration Notes",
+        "GTM Prompts And Evals"
+      ],
+      "n8n_mcp": "recommended_inspection"
+    },
+    {
+      "model_id": "gtm-eval-and-qa-agent",
+      "display_name": "GTM Eval and QA Agent",
+      "source_file": "agents/eval-and-qa-agent.md",
+      "recommended_knowledge": [
+        "GTM Loop Operating System",
+        "GTM Build System",
+        "GTM Loop Specs",
+        "GTM Prompts And Evals"
+      ],
+      "n8n_mcp": "usually_off"
+    }
+  ],
+  "first_test_prompts": [
+    "Design a loop that turns a Gong call transcript into a HubSpot deal brief.",
+    "Here is a failed n8n execution log. Diagnose it and propose a fix.",
+    "Turn this repeated manual GTM task into an automation spec.",
+    "Design a buying-signal loop using Evergrowth, HubSpot and n8n.",
+    "Evaluate this loop and tell me whether it is safe and worth building."
+  ],
+  "safety_defaults": {
+    "workflow_activation_requires_explicit_approval": true,
+    "crm_writes_require_explicit_approval": true,
+    "emails_and_external_messages_require_explicit_approval": true,
+    "sensitive_data_requires_explicit_approval": true,
+    "secrets_in_prompts_or_knowledge_allowed": false
+  }
+}

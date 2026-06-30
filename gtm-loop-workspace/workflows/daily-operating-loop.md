@@ -3,13 +3,16 @@
 ## Start
 
 1. Open `HOME.md`.
-2. Read `llm-wiki/current-client.md`.
-3. Read `workbench.md`.
-4. Review `board.md`.
-5. Open the active client folder.
-6. Review `open-questions.md`, `workflow-inventory.md`, and `validation-notes.md`.
-7. Check `tools/tool-registry.md` and `governance/approval-gates.md` if tools or writes are involved.
-8. Pick one outcome for the session.
+2. Read `workbench.md`.
+3. Read `orchestrator/state.md`, `orchestrator/loop-constraints.md`, `orchestrator/transition-rules.md`, and `orchestrator/agent-routing.md`.
+4. Read `UPDATE-OWNERSHIP.md` if anything will be updated.
+5. Read `llm-wiki/current-client.md`.
+6. Review `board.md`.
+7. Create or resume one run from `runs/_template.md` for meaningful work.
+8. Open the active client folder.
+9. Review `open-questions.md`, `workflow-inventory.md`, and `validation-notes.md`.
+10. Check `tools/tool-registry.md` and `governance/approval-gates.md` if tools or writes are involved.
+11. Pick one outcome for the session.
 
 ## Work
 
@@ -32,8 +35,9 @@
 4. Record validation results.
 5. Update `workflows/registry.md` if an automation changed stage.
 6. Log meaningful work in `runs/index.md`.
-7. Move or update the matching `board.md` card.
-8. Write the next action in `llm-wiki/current-client.md`.
+7. Move or update the matching `board.md` card according to `orchestrator/transition-rules.md`.
+8. Update `HOME.md` and `workbench.md` only if active status changed.
+9. Write the next action in `llm-wiki/current-client.md`.
 
 ## Daily Rule
 

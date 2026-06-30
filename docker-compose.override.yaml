@@ -1,5 +1,7 @@
 services:
   open-webui:
+    volumes:
+      - ./gtm-loop-workspace:/app/gtm-loop-workspace:ro
     environment:
       WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY}
       ENABLE_OLLAMA_API: "False"

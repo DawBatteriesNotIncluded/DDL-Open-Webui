@@ -1,0 +1,33 @@
+{
+  "payload_name": "gong-call-transcript-event-fake",
+  "sensitivity": "fake_redacted",
+  "purpose": "Validate Gong signal extraction without storing a real transcript.",
+  "source_system": "Gong",
+  "target_system": "Open WebUI or n8n",
+  "call": {
+    "call_id": "fake-call-001",
+    "started_at": "2026-01-15T14:00:00Z",
+    "duration_seconds": 1800,
+    "participants": [
+      {
+        "name": "Seller Example",
+        "role": "seller",
+        "email": "seller@example.test"
+      },
+      {
+        "name": "Buyer Example",
+        "role": "buyer",
+        "email": "buyer@example-customer.test"
+      }
+    ],
+    "account_name": "Example Robotics Ltd",
+    "deal_name": "Example Expansion",
+    "redacted_transcript_excerpt": "Buyer asked about integration timelines, data security, and CRM write-back controls."
+  },
+  "expected_signals": [
+    "integration_timeline_question",
+    "security_review_needed",
+    "crm_write_back_interest"
+  ],
+  "approval_required_before_crm_write": true
+}

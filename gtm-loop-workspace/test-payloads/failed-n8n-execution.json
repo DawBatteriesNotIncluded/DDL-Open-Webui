@@ -1,0 +1,24 @@
+{
+  "executionId": "exec_fake_6001",
+  "workflowId": "workflow_fake_7001",
+  "workflowName": "Buying Signal to HubSpot Task",
+  "failedAt": "2026-01-18T11:42:00Z",
+  "node": {
+    "name": "Create HubSpot Task",
+    "type": "n8n-nodes-base.hubspot",
+    "operation": "create"
+  },
+  "error": {
+    "message": "Property values were not valid",
+    "httpStatus": 400,
+    "details": {
+      "field": "hs_timestamp",
+      "reason": "Expected Unix timestamp in milliseconds"
+    }
+  },
+  "input": {
+    "task_body": "Review buying signal for Example BioSystems",
+    "hs_timestamp": "2026-01-20"
+  }
+}
+

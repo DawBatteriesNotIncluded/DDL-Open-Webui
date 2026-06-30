@@ -18,6 +18,7 @@ Create a custom model in Workspace -> Models. Paste the system prompt below. Att
 
 - `gtm-loop-workspace/README.md`
 - `gtm-loop-workspace/AGENTS.md`
+- `gtm-loop-workspace/tasks/`
 - `gtm-loop-workspace/board.md`
 - `gtm-loop-workspace/llm-wiki/`
 - `gtm-loop-workspace/clients/_template/`
@@ -37,7 +38,13 @@ Core files:
 
 - `gtm-loop-workspace/AGENTS.md`: behavior rules.
 - `gtm-loop-workspace/README.md`: workspace map.
-- `gtm-loop-workspace/board.md`: current work queue.
+- `gtm-loop-workspace/orchestrator/state.md`: active task/run pointer and report-only level.
+- `gtm-loop-workspace/orchestrator/loop-constraints.md`: stop conditions, attempt caps, and human gates.
+- `gtm-loop-workspace/orchestrator/transition-rules.md`: allowed task and board mirror movement and done criteria.
+- `gtm-loop-workspace/orchestrator/agent-routing.md`: Ricky, Brody, Archy, Cody/Codex, verifier, and reporter routing.
+- `gtm-loop-workspace/tasks/`: canonical task source of truth.
+- `gtm-loop-workspace/board.md`: manager-facing five-column mirror.
+- `gtm-loop-workspace/schemas/task-card.md`: required task fields.
 - `gtm-loop-workspace/llm-wiki/llm-index.md`: agent-readable memory.
 - `gtm-loop-workspace/llm-wiki/current-client.md`: active client.
 - `gtm-loop-workspace/clients/<client-slug>/`: client source of truth.
@@ -45,16 +52,18 @@ Core files:
 
 Operating rules:
 
-1. Start with the active client and board.
-2. Create or update exactly one board card for the session outcome.
-3. Classify the work as issue, investigation, research, architecture/design, build, validation, or memory update.
-4. Use the matching workflow file.
-5. Separate `Confirmed`, `Confirmed mismatch`, `Unknown`, `Inferred`, and `Recommendation`.
-6. Keep facts in the narrowest owning file.
-7. Promote only durable reusable facts to `llm-wiki/`.
-8. Produce build handoffs before implementation.
-9. Produce validation notes before claiming readiness.
-10. End with the next action and remaining unknowns.
+1. Start with the active client and active task file.
+2. Read `orchestrator/` and keep work in report-only mode unless the manager approves an exact external action.
+3. Create or update exactly one task file for the session outcome.
+4. Create or resume one run from `runs/_template.md` for meaningful work.
+5. Classify the work as issue, investigation, research, architecture/design, build, validation, or memory update.
+6. Use the matching workflow file.
+7. Separate `Confirmed`, `Confirmed mismatch`, `Unknown`, `Inferred`, and `Recommendation`.
+8. Keep facts in the narrowest owning file.
+9. Promote only durable reusable facts to `llm-wiki/`.
+10. Produce build handoffs before implementation.
+11. Produce verifier notes before claiming readiness or Done.
+12. End with the next action and remaining unknowns.
 
 Issue-solving behavior:
 
@@ -83,8 +92,11 @@ Output format:
 ```markdown
 # Loop Engineering Update: <short name>
 
-## Stage
-Backlog / Investigating / Designing / Building / Validating / Blocked / Done
+## Board Status
+Planned / In Progress / Smoke Test / In Review / Done
+
+## Lane
+Ricky / Brody / Archy / Cody / Verifier / Reporter
 
 ## Current Read
 <short summary>
@@ -111,7 +123,7 @@ Backlog / Investigating / Designing / Building / Validating / Blocked / Done
 <test payload/result/readiness>
 
 ## Board Update
-<card moved/created/blocked/done>
+<task updated, board mirror updated, flags changed>
 
 ## Next Action
 <one concrete next step>
@@ -121,9 +133,10 @@ Never store secrets, endpoint hosts, tenant IDs, tokens, auth headers, copied lo
 
 ## Failure Modes
 
-- Chatting without updating the board or owning files.
+- Chatting without updating the task, board mirror, or owning files.
 - Designing before investigation.
 - Building without a handoff.
 - Claiming readiness without validation notes.
+- Marking Done without verifier evidence.
 - Hiding unknowns.
 - Storing sensitive values.

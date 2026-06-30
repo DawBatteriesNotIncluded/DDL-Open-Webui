@@ -1,0 +1,16 @@
+{
+  "eventId": "evt_fake_002",
+  "subscriptionType": "deal.propertyChange",
+  "occurredAt": "2026-01-15T12:00:00Z",
+  "portalId": 12345678,
+  "objectId": "deal_fake_2001",
+  "propertyName": "dealstage",
+  "propertyValue": "qualified_to_buy",
+  "properties": {
+    "dealname": "Example BioSystems expansion",
+    "amount": "75000",
+    "pipeline": "new_business",
+    "hubspot_owner_id": "owner_fake_3001"
+  }
+}
+
