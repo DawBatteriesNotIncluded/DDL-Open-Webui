@@ -4,7 +4,13 @@
 	import { WEBUI_NAME, mobile, showSidebar } from '$lib/stores';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import SidebarIcon from '$lib/components/icons/Sidebar.svelte';
-	import { getGtmLoopTasks, type GtmLoopTask } from '$lib/apis/gtm-loop';
+	import {
+		getGtmLoopTasks,
+		updateGtmLoopTaskStatus,
+		type GtmLoopBoardStatus,
+		type GtmLoopTask
+	} from '$lib/apis/gtm-loop';
+	import { toast } from 'svelte-sonner';
 
 	const i18n = getContext('i18n');
 
@@ -14,7 +20,12 @@
 		{ key: 'smoke-test', label: 'Smoke Test' },
 		{ key: 'in-review', label: 'In Review' },
 		{ key: 'done', label: 'Done' }
-	];
+	] satisfies { key: GtmLoopBoardStatus; label: string }[];
+	const cancelledColumn = { key: 'cancelled', label: 'Cancelled' } satisfies {
+		key: GtmLoopBoardStatus;
+		label: string;
+	};
+	const statusOptions = [...columns, cancelledColumn];
 
 	type ApiState = 'loading' | 'loaded' | 'unauthorized' | 'error';
 
@@ -36,6 +47,8 @@
 	let executorFilter = '';
 	let verifierFilter = '';
 	let tasksByColumn: Record<string, GtmLoopTask[]> = {};
+	let visibleColumns = columns;
+	let updatingTaskId = '';
 
 	type StringFilterField =
 		| 'client'
@@ -157,6 +170,25 @@
 	const textOrFallback = (value: string | null | undefined, fallback = 'None recorded.') =>
 		value && value.trim() ? value : fallback;
 
+	const updateTaskStatus = async (task: GtmLoopTask, boardStatus: GtmLoopBoardStatus) => {
+		if (boardStatus === task.board_status) return;
+
+		updatingTaskId = task.id;
+		try {
+			const updated = await updateGtmLoopTaskStatus(localStorage.token ?? '', task.id, boardStatus);
+			await loadTasks();
+			if (updated.audit_warning) {
+				toast.warning(`${task.id} moved; ${updated.audit_warning}`);
+			} else {
+				toast.success(`Moved ${task.id} to ${formatLabel(boardStatus)} and logged audit entry.`);
+			}
+		} catch (err) {
+			toast.error(getErrorDetail(err));
+		} finally {
+			updatingTaskId = '';
+		}
+	};
+
 	const stateClass = (state: ApiState) => {
 		if (state === 'loaded') return 'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-200';
 		if (state === 'unauthorized')
@@ -175,7 +207,7 @@
 	};
 
 	$: clientOptions = getOptions('client');
-	$: boardStatusOptions = getOptions('board_status');
+	$: boardStatusOptions = statusOptions.map(({ key }) => key);
 	$: currentLaneOptions = getOptions('current_lane');
 	$: priorityOptions = getOptions('priority');
 	$: executorOptions = getOptions('executor');
@@ -193,8 +225,9 @@
 		verifierFilter
 	};
 	$: filteredTasks = tasks.filter((task) => taskMatchesFilters(task, taskFilters));
+	$: visibleColumns = boardStatusFilter === 'cancelled' ? [cancelledColumn] : columns;
 	$: tasksByColumn = Object.fromEntries(
-		columns.map(({ key }) => [
+		visibleColumns.map(({ key }) => [
 			key,
 			filteredTasks
 				.filter((task) => task.board_status === key)
@@ -509,7 +542,7 @@
 			{/if}
 
 			<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-				{#each columns as column}
+				{#each visibleColumns as column}
 					<section
 						class="flex min-h-[24rem] flex-col rounded-lg border border-gray-100 bg-white dark:border-gray-850 dark:bg-gray-900"
 					>
@@ -573,6 +606,29 @@
 												<span class="rounded px-2 py-1 text-xs {flagClass('rework')}">
 													Rework needed
 												</span>
+											{/if}
+										</div>
+
+										<div class="mt-3">
+											<label>
+												<div class="text-xs font-medium text-gray-500">Move to</div>
+												<select
+													class="mt-1 w-full rounded-lg border border-gray-100 bg-white px-2 py-1.5 text-xs outline-none disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100"
+													disabled={updatingTaskId === task.id}
+													value={task.board_status}
+													on:change={(event) =>
+														updateTaskStatus(
+															task,
+															(event.currentTarget as HTMLSelectElement).value as GtmLoopBoardStatus
+														)}
+												>
+													{#each statusOptions as option}
+														<option value={option.key}>{formatLabel(option.key)}</option>
+													{/each}
+												</select>
+											</label>
+											{#if updatingTaskId === task.id}
+												<div class="mt-1 text-xs text-gray-500">{$i18n.t('Updating status...')}</div>
 											{/if}
 										</div>
 

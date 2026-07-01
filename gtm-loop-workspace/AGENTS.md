@@ -47,7 +47,9 @@ For issue solving, architecture, or build work:
 - Board columns are only Planned, In Progress, Smoke Test, In Review, and Done.
 - `Blocked`, `Approval Required`, and `Rework Needed` are task frontmatter flags, not board columns.
 - Detailed loop state and swimlane history belong inside task files.
-- `/gtm-loop/board` is a read-only frontend board over task files; editing and card movement are deferred.
+- `/gtm-loop/board` can update only `board_status` and `last_updated` in task frontmatter through the status-only endpoint.
+- Status changes append local JSONL audit entries under `tasks/_audit/status-changes.jsonl`; this is task-local transition audit, not the main run ledger.
+- Full card editing, body editing, artifacts, evidence, credentials, external systems, drag/drop, and workflow activation remain blocked.
 - Future frontend board work should rely on task files that pass `scripts/validate-gtm-tasks.js`.
 
 ## Source Safety

@@ -59,7 +59,7 @@ The read-only GTM Loop Kanban board is available at:
 http://localhost:3000/gtm-loop/board
 ```
 
-`/gtm-loop` is the cockpit dashboard. `/gtm-loop/board` is a read-only visual board over `gtm-loop-workspace/tasks/*.md`; task files remain the source of truth. Board search and filters are client-side only over the task list returned by `GET /api/gtm-loop/tasks`.
+`/gtm-loop` is the cockpit dashboard. `/gtm-loop/board` is a visual board over `gtm-loop-workspace/tasks/*.md`; task files remain the source of truth. Board search and filters are client-side only over the task list returned by `GET /api/gtm-loop/tasks`. Status moves use a narrow authenticated PATCH endpoint that may update only `board_status` and `last_updated`, then append a local audit entry under `tasks/_audit/status-changes.jsonl`.
 
 Use the existing compose stack:
 
@@ -70,7 +70,7 @@ docker compose restart open-webui
 docker compose stop open-webui
 ```
 
-Local development uses `docker-compose.override.yaml` to mount `./gtm-loop-workspace` into the container at `/app/gtm-loop-workspace` as read-only. That means edits to `tasks/*.md` on the host appear in `/gtm-loop/board` after refresh, without rebuilding the image. Production/image-only runs can still use the workspace copied by the `Dockerfile` when the override is not applied.
+Local development uses `docker-compose.override.yaml` to mount `./gtm-loop-workspace` into the container at `/app/gtm-loop-workspace` as read-only, with only `./gtm-loop-workspace/tasks` overlaid as writable for status-only updates and the task-local audit log. Production/image-only runs can still use the workspace copied by the `Dockerfile` when the override is not applied.
 
 Do not run the setup import scripts with real credentials. For v1, keep HubSpot, Gong, AirOps, n8n writes, workflow activation, and external API writes disabled.
 
@@ -103,7 +103,7 @@ Start with Knowledge-only. Add n8n, HubSpot, Gong, AirOps, API, or repo tools on
 8. Run the Loop Engineering Workstation Agent.
 9. Log the result in `runs/index.md`.
 
-Editing cards, moving cards, and writing task state from the UI are intentionally deferred.
+Full card editing, drag/drop, and broad task writes are intentionally deferred. The only UI write path is changing task `board_status`, which also updates `last_updated` and appends a local status audit entry.
 
 ## Manual UI Smoke Test
 
@@ -115,9 +115,9 @@ Editing cards, moving cards, and writing task state from the UI are intentionall
 6. Search for a task id or client and confirm only matching cards remain.
 7. Try quick filters: `Blocked`, `Approval Required`, `Rework Needed`, `In Review`, and `Smoke Test`; confirm non-matching cards are hidden.
 8. Clear filters and confirm all cards return.
-9. Make a harmless local edit to one task `next_action` in `gtm-loop-workspace/tasks/`.
-10. Refresh `/gtm-loop/board` and confirm the edit appears.
-11. Revert the test edit.
+9. Move one test task from `planned` to `in-progress`, then back to `planned`.
+10. Confirm only `board_status` and `last_updated` changed in task frontmatter.
+11. Confirm two entries were appended to `gtm-loop-workspace/tasks/_audit/status-changes.jsonl`.
 12. Run `node scripts\validate-gtm-tasks.js`.
 
 If the status panel says `unauthorized`, log in to Open WebUI and refresh. The GTM task API is intentionally authenticated.

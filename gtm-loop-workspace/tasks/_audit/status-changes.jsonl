@@ -1,0 +1,2 @@
+{"timestamp":"2026-07-01T00:24:53Z","task_id":"GTM-001","old_board_status":"planned","new_board_status":"in-progress","actor":"ddlfgc@gmail.com","source":"/gtm-loop/board","endpoint":"PATCH /api/gtm-loop/tasks/{task_id}/status","success":true}
+{"timestamp":"2026-07-01T00:24:53Z","task_id":"GTM-001","old_board_status":"in-progress","new_board_status":"planned","actor":"ddlfgc@gmail.com","source":"/gtm-loop/board","endpoint":"PATCH /api/gtm-loop/tasks/{task_id}/status","success":true}

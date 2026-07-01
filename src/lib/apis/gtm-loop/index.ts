@@ -1,11 +1,19 @@
 import { WEBUI_BASE_URL } from '$lib/constants';
 
+export type GtmLoopBoardStatus =
+	| 'planned'
+	| 'in-progress'
+	| 'smoke-test'
+	| 'in-review'
+	| 'done'
+	| 'cancelled';
+
 export type GtmLoopTask = {
 	gtm_task: boolean;
 	id: string;
 	title: string;
 	client: string;
-	board_status: 'planned' | 'in-progress' | 'smoke-test' | 'in-review' | 'done' | 'cancelled';
+	board_status: GtmLoopBoardStatus;
 	current_lane: string;
 	current_gate: string;
 	current_phase: string;
@@ -55,6 +63,11 @@ export type GtmLoopApiError = {
 	detail: string;
 };
 
+export type GtmLoopTaskStatusResponse = GtmLoopTask & {
+	audit_logged?: boolean;
+	audit_warning?: string;
+};
+
 export const getGtmLoopTasks = async (token: string = ''): Promise<GtmLoopTasksResponse> => {
 	const res = await fetch(`${WEBUI_BASE_URL}/api/gtm-loop/tasks`, {
 		method: 'GET',
@@ -67,6 +80,36 @@ export const getGtmLoopTasks = async (token: string = ''): Promise<GtmLoopTasksR
 
 	if (!res.ok) {
 		let detail = res.statusText || 'Unable to load GTM Loop tasks.';
+		try {
+			const body = await res.json();
+			detail = body.detail ?? detail;
+		} catch {
+			// Keep the status text fallback.
+		}
+
+		throw { status: res.status, detail } satisfies GtmLoopApiError;
+	}
+
+	return res.json();
+};
+
+export const updateGtmLoopTaskStatus = async (
+	token: string,
+	taskId: string,
+	boardStatus: GtmLoopBoardStatus
+): Promise<GtmLoopTaskStatusResponse> => {
+	const res = await fetch(`${WEBUI_BASE_URL}/api/gtm-loop/tasks/${taskId}/status`, {
+		method: 'PATCH',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		},
+		body: JSON.stringify({ board_status: boardStatus })
+	});
+
+	if (!res.ok) {
+		let detail = res.statusText || 'Unable to update GTM task status.';
 		try {
 			const body = await res.json();
 			detail = body.detail ?? detail;

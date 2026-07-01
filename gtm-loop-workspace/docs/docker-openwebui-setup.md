@@ -41,9 +41,10 @@ For local development, `docker-compose.override.yaml` mounts:
 
 ```text
 ./gtm-loop-workspace -> /app/gtm-loop-workspace:ro
+./gtm-loop-workspace/tasks -> /app/gtm-loop-workspace/tasks:rw
 ```
 
-The mount is read-only from the container. Edits to `gtm-loop-workspace/tasks/*.md` on the host are reflected by `GET /api/gtm-loop/tasks` and `/gtm-loop/board` after refresh, without rebuilding the image.
+The workspace mount is read-only from the container, with a dev-only writable overlay for `tasks/`. This keeps docs, prompts, agents, payloads, and other workspace files read-only while allowing the status-only task endpoint to update `board_status` and `last_updated` and append `tasks/_audit/status-changes.jsonl`.
 
 The `Dockerfile` still copies `gtm-loop-workspace` into the image. If the override is not used, Open WebUI falls back to that packaged copy.
 
@@ -53,9 +54,9 @@ The `Dockerfile` still copies `gtm-loop-workspace` into the image. If the overri
 2. Open `http://localhost:3000/gtm-loop/board`.
 3. Confirm the board status panel shows `API: loaded`, `Tasks: 11`, and `Source: bind-mounted/dev`.
 4. Confirm the five columns render: Planned, In Progress, Smoke Test, In Review, and Done.
-5. Make a harmless local edit to a task `next_action`.
-6. Refresh the board and confirm the edited text appears without rebuilding.
-7. Revert the test edit.
+5. Move one test task from `planned` to `in-progress`, then back to `planned`.
+6. Confirm only `board_status` and `last_updated` changed in task frontmatter.
+7. Confirm two entries were appended to `gtm-loop-workspace/tasks/_audit/status-changes.jsonl`.
 8. Run `node scripts\validate-gtm-tasks.js`.
 
 If the board shows `unauthorized`, the browser is not logged in or the session token is missing. Refresh after logging in; do not disable auth for this test.
@@ -110,6 +111,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\gtm-loop-workspace\imports
 - It does not write secrets to files.
 - It does not activate n8n workflows.
 - It does not send email or modify CRM data.
+- It does not grant broad repo writes; only `gtm-loop-workspace/tasks` is writable in local dev for status-only task updates and local status audit entries.
 
 ## If It Fails
 

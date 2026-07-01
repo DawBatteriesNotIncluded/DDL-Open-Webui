@@ -30,9 +30,26 @@ The Open WebUI routes are:
 - `/gtm-loop`: cockpit dashboard.
 - `/gtm-loop/board`: read-only Kanban board.
 
-The board reads these task files through `GET /api/gtm-loop/tasks`. It does not edit or move cards; UI editing comes later. Search and filters on `/gtm-loop/board` are client-side only and do not change task files, `board.md`, or the API response.
+The board reads these task files through `GET /api/gtm-loop/tasks`. Status moves use `PATCH /api/gtm-loop/tasks/{task_id}/status` and may update only `board_status` and `last_updated` in YAML frontmatter. Successful status moves append a JSONL audit entry to `_audit/status-changes.jsonl`. Search and filters on `/gtm-loop/board` are client-side only and do not change task files, `board.md`, or the API response.
 
-In local Docker development, `docker-compose.override.yaml` bind-mounts this workspace into the container at `/app/gtm-loop-workspace` as read-only. Host edits to `tasks/*.md` are visible after refreshing `/gtm-loop/board`; no image rebuild is needed. Production mode may still use the image-baked copy of the workspace.
+In local Docker development, `docker-compose.override.yaml` bind-mounts this workspace into the container at `/app/gtm-loop-workspace` as read-only, then overlays `tasks/` as writable for status-only updates and `_audit/status-changes.jsonl`. Production mode may still use the image-baked copy of the workspace.
+
+## Status Audit
+
+`_audit/status-changes.jsonl` is a local JSON Lines audit for status transitions from `/gtm-loop/board`.
+
+Each line records:
+
+- `timestamp`
+- `task_id`
+- `old_board_status`
+- `new_board_status`
+- `actor`
+- `source`
+- `endpoint`
+- `success`
+
+It does not log task bodies, secrets, credentials, cookies, auth headers, or external payloads. It is not the main run ledger; use `../runs/index.md` for meaningful workbench runs.
 
 ## Browser Smoke Test
 
@@ -41,10 +58,12 @@ In local Docker development, `docker-compose.override.yaml` bind-mounts this wor
 3. Confirm the status panel says `API: loaded` and task count is `11`.
 4. Search for `GTM-001` and confirm only matching cards remain.
 5. Use the `Blocked` quick filter, confirm non-matching cards are hidden, and then clear filters.
-6. Edit one task `next_action` locally, refresh the board, and confirm the change appears.
-7. Revert the edit and run `node scripts\validate-gtm-tasks.js`.
+6. Move one test task from `planned` to `in-progress`, then back to `planned`.
+7. Confirm only `board_status` and `last_updated` changed in frontmatter.
+8. Confirm two audit entries were appended to `_audit/status-changes.jsonl`.
+9. Run `node scripts\validate-gtm-tasks.js`.
 
-The board is read-only. Task edits still happen in Markdown files, not in the UI.
+The board has only status-only writes and task-local audit appends. Task title, body, manager request, evidence, artifacts, credentials, and external system fields still happen in Markdown files, not in the UI.
 
 ## Board Mapping
 
