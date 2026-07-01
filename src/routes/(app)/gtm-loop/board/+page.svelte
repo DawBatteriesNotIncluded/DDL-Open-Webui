@@ -5,8 +5,10 @@
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import SidebarIcon from '$lib/components/icons/Sidebar.svelte';
 	import {
+		getGtmLoopTaskAudit,
 		getGtmLoopTasks,
 		updateGtmLoopTaskStatus,
+		type GtmLoopTaskAuditEntry,
 		type GtmLoopBoardStatus,
 		type GtmLoopTask
 	} from '$lib/apis/gtm-loop';
@@ -28,6 +30,11 @@
 	const statusOptions = [...columns, cancelledColumn];
 
 	type ApiState = 'loading' | 'loaded' | 'unauthorized' | 'error';
+	type AuditState = {
+		state: 'idle' | 'loading' | 'loaded' | 'error';
+		entries: GtmLoopTaskAuditEntry[];
+		error?: string;
+	};
 
 	let tasks: GtmLoopTask[] = [];
 	let apiState: ApiState = 'loading';
@@ -49,6 +56,7 @@
 	let tasksByColumn: Record<string, GtmLoopTask[]> = {};
 	let visibleColumns = columns;
 	let updatingTaskId = '';
+	let auditByTaskId: Record<string, AuditState> = {};
 
 	type StringFilterField =
 		| 'client'
@@ -170,6 +178,29 @@
 	const textOrFallback = (value: string | null | undefined, fallback = 'None recorded.') =>
 		value && value.trim() ? value : fallback;
 
+	const loadTaskAudit = async (taskId: string, force = false) => {
+		const current = auditByTaskId[taskId];
+		if (!force && (current?.state === 'loading' || current?.state === 'loaded')) return;
+
+		auditByTaskId = {
+			...auditByTaskId,
+			[taskId]: { state: 'loading', entries: current?.entries ?? [] }
+		};
+
+		try {
+			const response = await getGtmLoopTaskAudit(localStorage.token ?? '', taskId);
+			auditByTaskId = {
+				...auditByTaskId,
+				[taskId]: { state: 'loaded', entries: response.entries ?? [] }
+			};
+		} catch (err) {
+			auditByTaskId = {
+				...auditByTaskId,
+				[taskId]: { state: 'error', entries: current?.entries ?? [], error: getErrorDetail(err) }
+			};
+		}
+	};
+
 	const updateTaskStatus = async (task: GtmLoopTask, boardStatus: GtmLoopBoardStatus) => {
 		if (boardStatus === task.board_status) return;
 
@@ -177,6 +208,9 @@
 		try {
 			const updated = await updateGtmLoopTaskStatus(localStorage.token ?? '', task.id, boardStatus);
 			await loadTasks();
+			if (auditByTaskId[task.id]?.state === 'loaded') {
+				await loadTaskAudit(task.id, true);
+			}
 			if (updated.audit_warning) {
 				toast.warning(`${task.id} moved; ${updated.audit_warning}`);
 			} else {
@@ -645,7 +679,14 @@
 											</div>
 										{/if}
 
-										<details class="mt-3 rounded-lg bg-white dark:bg-gray-900">
+										<details
+											class="mt-3 rounded-lg bg-white dark:bg-gray-900"
+											on:toggle={(event) => {
+												if ((event.currentTarget as HTMLDetailsElement).open) {
+													loadTaskAudit(task.id);
+												}
+											}}
+										>
 											<summary class="cursor-pointer px-2 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-200">
 												{$i18n.t('Task card details')}
 											</summary>
@@ -736,6 +777,35 @@
 														<div class="font-medium text-gray-500">Source task file</div>
 														<div class="mt-1 break-all font-mono">{task.source_path}</div>
 													</div>
+												</div>
+												<div>
+													<div class="font-medium text-gray-500">Latest status changes</div>
+													{#if auditByTaskId[task.id]?.state === 'loading'}
+														<div class="mt-1">Loading status changes...</div>
+													{:else if auditByTaskId[task.id]?.state === 'error'}
+														<div class="mt-1 text-amber-700 dark:text-amber-300">
+															{auditByTaskId[task.id]?.error}
+														</div>
+													{:else if (auditByTaskId[task.id]?.entries?.length ?? 0) === 0}
+														<div class="mt-1">No status changes logged yet.</div>
+													{:else}
+														<div class="mt-1 space-y-2">
+															{#each auditByTaskId[task.id]?.entries ?? [] as entry}
+																<div class="rounded bg-gray-50 px-2 py-2 dark:bg-gray-850">
+																	<div class="font-mono text-[11px] text-gray-500">{entry.timestamp}</div>
+																	<div class="mt-1">
+																		{formatLabel(entry.old_board_status)} -> {formatLabel(
+																			entry.new_board_status
+																		)}
+																	</div>
+																	<div class="mt-1 text-gray-500">
+																		{textOrFallback(entry.actor, 'Unknown actor')} via
+																		{textOrFallback(entry.source, 'unknown source')}
+																	</div>
+																</div>
+															{/each}
+														</div>
+													{/if}
 												</div>
 											</div>
 										</details>

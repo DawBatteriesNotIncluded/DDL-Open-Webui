@@ -59,7 +59,7 @@ The read-only GTM Loop Kanban board is available at:
 http://localhost:3000/gtm-loop/board
 ```
 
-`/gtm-loop` is the cockpit dashboard. `/gtm-loop/board` is a visual board over `gtm-loop-workspace/tasks/*.md`; task files remain the source of truth. Board search and filters are client-side only over the task list returned by `GET /api/gtm-loop/tasks`. Status moves use a narrow authenticated PATCH endpoint that may update only `board_status` and `last_updated`, then append a local audit entry under `tasks/_audit/status-changes.jsonl`.
+`/gtm-loop` is the cockpit dashboard. `/gtm-loop/board` is a visual board over `gtm-loop-workspace/tasks/*.md`; task files remain the source of truth. Board search and filters are client-side only over the task list returned by `GET /api/gtm-loop/tasks`. Status moves use a narrow authenticated PATCH endpoint that may update only `board_status` and `last_updated`, then append a local audit entry under `tasks/_audit/status-changes.jsonl`. Card details use `GET /api/gtm-loop/tasks/{task_id}/audit` to show the latest matching status changes.
 
 Use the existing compose stack:
 
@@ -118,7 +118,8 @@ Full card editing, drag/drop, and broad task writes are intentionally deferred. 
 9. Move one test task from `planned` to `in-progress`, then back to `planned`.
 10. Confirm only `board_status` and `last_updated` changed in task frontmatter.
 11. Confirm two entries were appended to `gtm-loop-workspace/tasks/_audit/status-changes.jsonl`.
-12. Run `node scripts\validate-gtm-tasks.js`.
+12. Open task card details and confirm latest status changes display.
+13. Run `node scripts\validate-gtm-tasks.js`.
 
 If the status panel says `unauthorized`, log in to Open WebUI and refresh. The GTM task API is intentionally authenticated.
 

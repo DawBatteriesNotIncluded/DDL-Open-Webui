@@ -219,6 +219,36 @@ def append_status_audit_entry(entry: dict) -> str | None:
     return None
 
 
+def read_status_audit_entries(task_id: str, limit: int) -> list[dict]:
+    if not STATUS_AUDIT_LOG.exists():
+        return []
+
+    entries = []
+    for line in STATUS_AUDIT_LOG.read_text(encoding='utf-8').splitlines():
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+        if entry.get('task_id') != task_id:
+            continue
+
+        entries.append(
+            {
+                'timestamp': str(entry.get('timestamp', '')),
+                'task_id': str(entry.get('task_id', '')),
+                'old_board_status': str(entry.get('old_board_status', '')),
+                'new_board_status': str(entry.get('new_board_status', '')),
+                'actor': str(entry.get('actor', '')),
+                'source': str(entry.get('source', '')),
+                'endpoint': str(entry.get('endpoint', '')),
+                'success': entry.get('success') is True,
+            }
+        )
+
+    return entries[-limit:][::-1]
+
+
 def update_task_status_file(file_path: Path, board_status: str) -> tuple[dict, str, str]:
     if board_status not in ALLOWED_BOARD_STATUSES:
         raise HTTPException(status_code=400, detail='board_status is not allowed.')
@@ -301,3 +331,16 @@ async def update_gtm_loop_task_status(
     if audit_warning:
         task['audit_warning'] = audit_warning
     return task
+
+
+@router.get('/tasks/{task_id}/audit')
+async def get_gtm_loop_task_audit(
+    task_id: str,
+    limit: int = 3,
+    user=Depends(get_verified_user),
+):
+    task_file_for_id(task_id)
+    return {
+        'task_id': task_id,
+        'entries': read_status_audit_entries(task_id, max(1, min(limit, 50))),
+    }

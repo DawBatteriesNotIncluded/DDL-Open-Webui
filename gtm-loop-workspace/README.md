@@ -83,9 +83,9 @@ Future frontend board work should read only from valid task files. Task validati
 | Route | Use |
 | --- | --- |
 | `/gtm-loop` | Cockpit dashboard with task counts, safety posture, starter prompt, and links. |
-| `/gtm-loop/board` | Kanban board grouped by `board_status` from `tasks/*.md`, with client-side search, filters, and status-only task updates. |
+| `/gtm-loop/board` | Kanban board grouped by `board_status` from `tasks/*.md`, with client-side search, filters, status-only task updates, and latest status audit in card details. |
 
-The board loads task metadata through `GET /api/gtm-loop/tasks`. Status moves use `PATCH /api/gtm-loop/tasks/{task_id}/status` and may change only `board_status` and `last_updated` in YAML frontmatter. Successful status moves append a local JSONL audit entry to `tasks/_audit/status-changes.jsonl`. It does not edit title, body, artifacts, manager request, evidence, credentials, or external system fields. It does not call external APIs or connect to n8n. Search and filters run client-side in the browser over the loaded task list.
+The board loads task metadata through `GET /api/gtm-loop/tasks`. Status moves use `PATCH /api/gtm-loop/tasks/{task_id}/status` and may change only `board_status` and `last_updated` in YAML frontmatter. Successful status moves append a local JSONL audit entry to `tasks/_audit/status-changes.jsonl`. Card details read the latest status changes through `GET /api/gtm-loop/tasks/{task_id}/audit`. It does not edit title, body, artifacts, manager request, evidence, credentials, or external system fields. It does not call external APIs or connect to n8n. Search and filters run client-side in the browser over the loaded task list.
 
 In local Docker development, `docker-compose.override.yaml` mounts `./gtm-loop-workspace` into `/app/gtm-loop-workspace` read-only and overlays `./gtm-loop-workspace/tasks` as writable for status-only task updates and the task-local audit log. The `Dockerfile` still packages the workspace for image-baked runs where the override is not used.
 
@@ -101,7 +101,8 @@ Manual board smoke test:
 8. Move one test task from `planned` to `in-progress`, then back to `planned`.
 9. Confirm only `board_status` and `last_updated` changed in task frontmatter.
 10. Confirm two entries were appended to `tasks/_audit/status-changes.jsonl`.
-11. Run `node scripts\validate-gtm-tasks.js`.
+11. Open the task card details and confirm latest status changes display.
+12. Run `node scripts\validate-gtm-tasks.js`.
 
 ## Evidence Labels
 
@@ -168,4 +169,4 @@ No external API writes, workflow activation, email sending, credential changes, 
 
 ## Status Audit
 
-`tasks/_audit/status-changes.jsonl` records local status transitions only. Each line includes timestamp, task id, old status, new status, actor when available, source, endpoint, and success. It does not store task bodies, secrets, credentials, cookies, auth headers, or external system payloads. Use `runs/index.md` for meaningful workbench runs; the JSONL file is only a lightweight transition audit.
+`tasks/_audit/status-changes.jsonl` records local status transitions only. Each line includes timestamp, task id, old status, new status, actor when available, source, endpoint, and success. `GET /api/gtm-loop/tasks/{task_id}/audit` returns the latest matching entries for one task only. It does not store or return task bodies, secrets, credentials, cookies, auth headers, or external system payloads. Use `runs/index.md` for meaningful workbench runs; the JSONL file is only a lightweight transition audit.
