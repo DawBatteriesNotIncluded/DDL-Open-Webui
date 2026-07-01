@@ -1,0 +1,18 @@
+{
+  "purpose": "Fake AirOps enrichment response for draft n8n validation.",
+  "source_system": "airops",
+  "target_system": "n8n",
+  "sensitivity": "fake",
+  "redacted": true,
+  "request_id": "fake-airops-request-001",
+  "status": "completed",
+  "outputs": {
+    "account_summary": "Example Company is a fake account used for workflow testing.",
+    "recommended_next_step": "Prepare a fake follow-up task for manager review.",
+    "risk_flags": [
+      "approval-required-before-crm-write"
+    ],
+    "confidence": 0.82
+  }
+}
+

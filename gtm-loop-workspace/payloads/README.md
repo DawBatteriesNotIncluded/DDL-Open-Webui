@@ -26,6 +26,11 @@ Library for fake or redacted payloads used in workflow design, validation, and d
 | `hubspot/contact-company-update.fake.json` | Fake HubSpot contact/company update mapping. |
 | `gong/call-transcript-event.fake.json` | Fake/redacted Gong call event and signal extraction. |
 | `n8n/webhook-input.fake.json` | Fake n8n webhook trigger input. |
+| `n8n/fake-gong-webhook.json` | Fake Gong webhook-style event for n8n workflow drafting. |
+| `n8n/fake-airops-request.json` | Fake AirOps request prepared by draft n8n logic. |
+| `n8n/fake-airops-response.json` | Fake AirOps response for draft n8n validation. |
+| `n8n/fake-hubspot-update-prep.json` | Fake HubSpot update body preparation with writes disabled. |
+| `n8n/fake-n8n-workflow-test-result.json` | Fake n8n draft workflow test result. |
 | `airops/enrichment-request.fake.json` | Fake AirOps enrichment request. |
 | `airops/enrichment-response.fake.json` | Fake AirOps enrichment response. |
 | `api/custom-webhook.fake.json` | Fake custom API webhook input. |

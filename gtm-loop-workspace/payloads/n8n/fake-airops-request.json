@@ -1,0 +1,21 @@
+{
+  "purpose": "Fake AirOps enrichment request prepared by a draft n8n workflow.",
+  "source_system": "n8n",
+  "target_system": "airops",
+  "sensitivity": "fake",
+  "redacted": true,
+  "request_id": "fake-airops-request-001",
+  "workflow": "account_enrichment_draft",
+  "inputs": {
+    "company_domain": "example.invalid",
+    "company_name": "Example Company",
+    "call_summary": "Fake call summary with no customer data.",
+    "requested_outputs": [
+      "account_summary",
+      "recommended_next_step",
+      "risk_flags"
+    ]
+  },
+  "write_allowed": false
+}
+

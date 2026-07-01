@@ -33,6 +33,10 @@ Use task frontmatter flags instead:
 
 `PATCH /api/gtm-loop/tasks/{task_id}/status` is for manager board movement. It may update only `board_status` and `last_updated`.
 
+Drag/drop on `/gtm-loop/board` is a status move only. It must call the same status endpoint, must not change `current_lane`, `current_phase`, or `current_gate`, and must not create artifacts or call external systems.
+
+Moving to `done` through the status endpoint is allowed only when the task is unblocked, does not need rework, has required approval approved, and is already in a reporter/manager review state: `board_status: in-review`, `current_lane: reporter`, `current_lane: manager`, `current_phase: report`, or `current_gate: manager-review`.
+
 `PATCH /api/gtm-loop/tasks/{task_id}/transition` is for orchestrator swimlane/gate progression. It may update only the safe frontmatter fields needed for the selected transition plus `last_updated`.
 
 Allowed orchestrator transitions:
@@ -50,6 +54,45 @@ Allowed orchestrator transitions:
 | `send-back-for-rework` | `cody` | `rework` | `build-complete` | `in-progress` |
 
 Transition writes append local audit entries under `tasks/_audit/status-changes.jsonl`. They do not call external systems, activate workflows, or write credentials.
+
+## Lane Artifact Creation
+
+Transitions move the task through lanes. Artifact creation creates the lane's local working documents.
+
+`POST /api/gtm-loop/tasks/{task_id}/artifacts/{lane}` may create deterministic Markdown starters only under `artifacts/<task_id>/` and may update only `artifact_links` plus `last_updated` in the task frontmatter.
+
+Allowed artifact lanes:
+
+| Lane | Creates |
+| --- | --- |
+| `research` | Ricky research brief, sources, notes, and evidence cards. |
+| `requirements` | Brody requirements, endpoint matrix, field mapping, open questions, and build handoff. |
+| `architecture` | Archy architecture, integration flow, ADR, and risks. |
+| `build` | Cody build plan, tool plan, test plan, and rollback plan. |
+| `verification` | Verifier report, failed checks, and rework instructions. |
+| `report` | Reporter completion report, manager summary, and approval request. |
+
+Artifact creation is local-only, template-based, and audited in `tasks/_audit/artifact-events.jsonl`. It does not call LLMs, external systems, n8n MCP, or production APIs.
+
+## Cody n8n Draft Executor
+
+When a task moves to Cody/build, n8n MCP may be used only as a draft executor surface after required requirements and architecture artifacts exist.
+
+Allowed Cody/n8n outputs:
+
+- local workflow draft specs;
+- local draft workflow JSON;
+- fake payload validation notes;
+- approval requests for live n8n actions.
+
+Blocked without explicit approval:
+
+- live workflow creation or update;
+- workflow activation, retry, scheduling, or production webhook calls;
+- real credential use;
+- HubSpot, Gong, AirOps, or custom API writes.
+
+Use `executors/n8n-draft-executor.md`, `integrations/n8n-mcp.md`, and `artifacts/_templates/build/n8n-workflow-draft.md`.
 
 ## Required Conditions
 

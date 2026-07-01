@@ -59,7 +59,7 @@ The GTM Loop Kanban board is available at:
 http://localhost:3000/gtm-loop/board
 ```
 
-`/gtm-loop` is the cockpit dashboard. `/gtm-loop/board` is a visual board over `gtm-loop-workspace/tasks/*.md`; task files remain the source of truth. Board search and filters are client-side only over the task list returned by `GET /api/gtm-loop/tasks`. Manager status moves use a narrow authenticated PATCH endpoint that may update only `board_status` and `last_updated`. Orchestrator transitions use a separate narrow authenticated PATCH endpoint for swimlane/gate progression. Both append local audit entries under `tasks/_audit/status-changes.jsonl`. Card details use `GET /api/gtm-loop/tasks/{task_id}/audit` to show the latest matching task changes.
+`/gtm-loop` is the cockpit dashboard. `/gtm-loop/board` is a visual board over `gtm-loop-workspace/tasks/*.md`; task files remain the source of truth. Board search and filters are client-side only over the task list returned by `GET /api/gtm-loop/tasks`. Manager status moves and drag/drop use a narrow authenticated PATCH endpoint that may update only `board_status` and `last_updated`. Drag/drop is status-only and does not change lane, phase, or gate state. Moving to Done is guarded by blocked, rework, approval, and reporter/manager review checks. Orchestrator transitions use a separate narrow authenticated PATCH endpoint for swimlane/gate progression. Lane artifact creation uses a narrow authenticated POST endpoint that creates deterministic Markdown starters under `artifacts/<task_id>/` and updates `artifact_links`. Status and transition moves append local audit entries under `tasks/_audit/status-changes.jsonl`; artifact creation appends to `tasks/_audit/artifact-events.jsonl`. Card details use `GET /api/gtm-loop/tasks/{task_id}/audit` to show the latest matching task changes.
 
 Use the existing compose stack:
 
@@ -70,9 +70,11 @@ docker compose restart open-webui
 docker compose stop open-webui
 ```
 
-Local development uses `docker-compose.override.yaml` to mount `./gtm-loop-workspace` into the container at `/app/gtm-loop-workspace` as read-only, with only `./gtm-loop-workspace/tasks` overlaid as writable for status-only updates and the task-local audit log. Production/image-only runs can still use the workspace copied by the `Dockerfile` when the override is not applied.
+Local development uses `docker-compose.override.yaml` to mount `./gtm-loop-workspace` into the container at `/app/gtm-loop-workspace` as read-only, with only `./gtm-loop-workspace/tasks` and `./gtm-loop-workspace/artifacts` overlaid as writable. Production/image-only runs can still use the workspace copied by the `Dockerfile` when the override is not applied.
 
-Do not run the setup import scripts with real credentials. For v1, keep HubSpot, Gong, AirOps, n8n writes, workflow activation, and external API writes disabled.
+Local n8n and n8n MCP containers may be available on the developer machine. Treat them as draft-only unless the user explicitly approves a specific live action. Use `integrations/n8n-mcp.md` and `executors/n8n-draft-executor.md` as Knowledge references for allowed draft behavior. The GTM Loop UI does not call n8n MCP in this pass.
+
+Do not run the setup import scripts with real credentials. For v1, keep HubSpot, Gong, AirOps, n8n writes, workflow activation, live webhooks, and external API writes disabled.
 
 ## Specialist Agents
 
@@ -91,6 +93,8 @@ Add these only when needed:
 
 Start with Knowledge-only. Add n8n, HubSpot, Gong, AirOps, API, or repo tools only after `tools/tool-registry.md` and `governance/approval-gates.md` define the allowed actions.
 
+For n8n MCP, the current allowed mode is `available-local / draft-only / approval-gated`: inspect local availability, draft local workflow artifacts, prepare draft JSON, and validate fake payloads. Do not enable live workflow creation, updates, activation, production webhooks, credential use, or external writes from Open WebUI without explicit approval.
+
 ## First Run
 
 1. Open `HOME.md`.
@@ -103,7 +107,7 @@ Start with Knowledge-only. Add n8n, HubSpot, Gong, AirOps, API, or repo tools on
 8. Run the Loop Engineering Workstation Agent.
 9. Log the result in `runs/index.md`.
 
-Full card editing, drag/drop, and broad task writes are intentionally deferred. The UI write paths are limited to manager status movement and orchestrator swimlane/gate transitions, both scoped to task frontmatter plus local audit.
+Full card editing, drag/drop lane transitions, and broad task writes are intentionally deferred. The UI write paths are limited to manager status movement, status-only drag/drop, orchestrator swimlane/gate transitions, and deterministic local Markdown artifact creation.
 
 ## Manual UI Smoke Test
 
@@ -115,14 +119,16 @@ Full card editing, drag/drop, and broad task writes are intentionally deferred. 
 6. Search for a task id or client and confirm only matching cards remain.
 7. Try quick filters: `Blocked`, `Approval Required`, `Rework Needed`, `In Review`, and `Smoke Test`; confirm non-matching cards are hidden.
 8. Clear filters and confirm all cards return.
-9. Move one test task from `planned` to `in-progress`, then back to `planned`.
+9. Move one test task from `planned` to `in-progress`, then back to `planned` using the dropdown or drag/drop.
 10. Open task details and run `Pick up task`, `Send to Archy`, `Send to Verifier`, and `Send to Reporter`.
 11. Confirm status moves changed only `board_status` and `last_updated`.
 12. Confirm orchestrator transitions changed only lane/gate/status frontmatter and `last_updated`.
-13. Confirm entries were appended to `gtm-loop-workspace/tasks/_audit/status-changes.jsonl`.
-14. Restore the test task to its original state if needed.
-15. Open task card details and confirm latest task changes display.
-16. Run `node scripts\validate-gtm-tasks.js`.
+13. Create lane artifacts and confirm files appear under `gtm-loop-workspace/artifacts/<task_id>/`.
+14. Confirm `artifact_links` and `gtm-loop-workspace/tasks/_audit/artifact-events.jsonl` were updated.
+15. Confirm entries were appended to `gtm-loop-workspace/tasks/_audit/status-changes.jsonl`.
+16. Restore the test task to its original state if needed.
+17. Open task card details and confirm latest task changes display.
+18. Run `node scripts\validate-gtm-tasks.js`.
 
 If the status panel says `unauthorized`, log in to Open WebUI and refresh. The GTM task API is intentionally authenticated.
 

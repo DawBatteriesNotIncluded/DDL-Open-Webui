@@ -14,7 +14,9 @@ router = APIRouter()
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 TASKS_DIR = REPO_ROOT / 'gtm-loop-workspace' / 'tasks'
+ARTIFACTS_DIR = REPO_ROOT / 'gtm-loop-workspace' / 'artifacts'
 STATUS_AUDIT_LOG = TASKS_DIR / '_audit' / 'status-changes.jsonl'
+ARTIFACT_AUDIT_LOG = TASKS_DIR / '_audit' / 'artifact-events.jsonl'
 SECRET_RE = re.compile(
     r'api_key|token|secret|password|bearer|private_key|client_secret|refresh_token|access_token',
     re.IGNORECASE,
@@ -128,6 +130,20 @@ TRANSITION_UPDATES = {
     },
 }
 ALLOWED_TRANSITIONS = set(TRANSITION_UPDATES) | {'send-back-for-rework'}
+LANE_ARTIFACTS = {
+    'research': ['brief.md', 'sources.md', 'notes.md', 'evidence-cards.md'],
+    'requirements': [
+        'requirements.md',
+        'endpoint-matrix.md',
+        'field-mapping.md',
+        'open-questions.md',
+        'build-handoff.md',
+    ],
+    'architecture': ['architecture.md', 'integration-flow.md', 'adr.md', 'risks.md'],
+    'build': ['build-plan.md', 'tool-plan.md', 'test-plan.md', 'rollback-plan.md'],
+    'verification': ['verification-report.md', 'failed-checks.md', 'rework-instructions.md'],
+    'report': ['completion-report.md', 'manager-summary.md', 'approval-request.md'],
+}
 
 
 class TaskStatusUpdate(BaseModel):
@@ -136,6 +152,10 @@ class TaskStatusUpdate(BaseModel):
 
 class TaskTransitionUpdate(BaseModel):
     transition: str
+
+
+class TaskArtifactCreate(BaseModel):
+    overwrite: bool = False
 
 
 def now_iso() -> str:
@@ -266,14 +286,22 @@ def replace_frontmatter_field(frontmatter: str, field: str, value: str) -> str:
     return f'{frontmatter.rstrip()}\n{field}: {value}\n'
 
 
-def append_task_audit_entry(entry: dict) -> str | None:
+def append_audit_entry(log_path: Path, entry: dict) -> str | None:
     try:
-        STATUS_AUDIT_LOG.parent.mkdir(parents=True, exist_ok=True)
-        with STATUS_AUDIT_LOG.open('a', encoding='utf-8') as audit_file:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open('a', encoding='utf-8') as audit_file:
             audit_file.write(json.dumps(entry, separators=(',', ':')) + '\n')
     except OSError:
         return 'Task updated, but local audit append failed.'
     return None
+
+
+def append_task_audit_entry(entry: dict) -> str | None:
+    return append_audit_entry(STATUS_AUDIT_LOG, entry)
+
+
+def append_artifact_audit_entry(entry: dict) -> str | None:
+    return append_audit_entry(ARTIFACT_AUDIT_LOG, entry)
 
 
 def read_status_audit_entries(task_id: str, limit: int) -> list[dict]:
@@ -322,7 +350,30 @@ def update_task_status_file(file_path: Path, board_status: str) -> tuple[dict, s
     if not match:
         raise HTTPException(status_code=400, detail='Task file is missing YAML frontmatter.')
 
-    old_board_status = parse_frontmatter(text).get('board_status')
+    frontmatter_data = parse_frontmatter(text)
+    old_board_status = frontmatter_data.get('board_status')
+    if board_status == 'done':
+        blockers = []
+        if frontmatter_data.get('blocked') is True:
+            blockers.append('task is blocked')
+        if frontmatter_data.get('rework_needed') is True:
+            blockers.append('task needs rework')
+        if frontmatter_data.get('approval_required') is True and frontmatter_data.get('approval_status') != 'approved':
+            blockers.append('approval is required but approval_status is not approved')
+        done_ready = (
+            old_board_status == 'in-review'
+            or frontmatter_data.get('current_lane') in {'reporter', 'manager'}
+            or frontmatter_data.get('current_phase') == 'report'
+            or frontmatter_data.get('current_gate') == 'manager-review'
+        )
+        if not done_ready:
+            blockers.append('task is not in a reporter/manager review state')
+        if blockers:
+            raise HTTPException(
+                status_code=400,
+                detail='Cannot move task to done via status update: ' + '; '.join(blockers) + '.',
+            )
+
     timestamp = now_iso()
     frontmatter = replace_frontmatter_field(match.group('frontmatter'), 'board_status', board_status)
     frontmatter = replace_frontmatter_field(frontmatter, 'last_updated', timestamp)
@@ -418,6 +469,151 @@ def update_task_transition_file(
     return task, old, updates, timestamp
 
 
+def yaml_list(values: list[str]) -> str:
+    return '[' + ', '.join(json.dumps(value) for value in values) + ']'
+
+
+def artifact_path_for(task_id: str, lane: str, filename: str) -> Path:
+    root = ARTIFACTS_DIR.resolve()
+    task_root = (ARTIFACTS_DIR / task_id).resolve()
+    target = (task_root / lane / filename).resolve()
+    if root != task_root and root not in task_root.parents:
+        raise HTTPException(status_code=400, detail='Artifact task path is invalid.')
+    if task_root != target and task_root not in target.parents:
+        raise HTTPException(status_code=400, detail='Artifact path is invalid.')
+    return target
+
+
+def artifact_link_for(task_id: str, lane: str, filename: str) -> str:
+    return f'gtm-loop-workspace/artifacts/{task_id}/{lane}/{filename}'
+
+
+def render_artifact(task: dict, lane: str, filename: str, timestamp: str) -> str:
+    title = filename.removesuffix('.md').replace('-', ' ').title()
+    template_path = ARTIFACTS_DIR / '_templates' / lane / filename
+    template = (
+        template_path.read_text(encoding='utf-8')
+        if template_path.exists()
+        else '# {{task_id}} {{file_title}}\n\n{{task_context}}\n\n{{approval_boundary}}\n'
+    )
+    body_sections = task.get('body_sections') or {}
+    values = {
+        'task_id': str(task.get('id') or ''),
+        'task_title': str(task.get('title') or ''),
+        'client': str(task.get('client') or ''),
+        'lane': lane,
+        'file_title': title,
+        'board_status': str(task.get('board_status') or ''),
+        'current_lane': str(task.get('current_lane') or ''),
+        'current_phase': str(task.get('current_phase') or ''),
+        'current_gate': str(task.get('current_gate') or ''),
+        'manager_request': str(
+            task.get('manager_request') or body_sections.get('manager_request') or ''
+        ),
+        'interpreted_objective': str(
+            task.get('interpreted_objective')
+            or body_sections.get('interpreted_objective')
+            or ''
+        ),
+        'next_action': str(task.get('next_action') or body_sections.get('next_action') or ''),
+        'definition_of_done': str(
+            task.get('definition_of_done') or body_sections.get('definition_of_done') or ''
+        ),
+        'generated_at': timestamp,
+    }
+    values['task_context'] = (
+        f"| Field | Value |\n"
+        f"| --- | --- |\n"
+        f"| Task | `{values['task_id']}` |\n"
+        f"| Title | {values['task_title']} |\n"
+        f"| Client | `{values['client']}` |\n"
+        f"| Board status | `{values['board_status']}` |\n"
+        f"| Lane | `{values['current_lane']}` |\n"
+        f"| Phase | `{values['current_phase']}` |\n"
+        f"| Gate | `{values['current_gate']}` |\n"
+        f"| Generated | `{timestamp}` |"
+    )
+    values['approval_boundary'] = (
+        "No external API writes, workflow activation, credential changes, email sends, "
+        "or production data mutation are allowed from this artifact. Use fake/redacted "
+        "examples only until a human approves the exact external action."
+    )
+    for key, value in values.items():
+        template = template.replace('{{' + key + '}}', value)
+    return template.rstrip() + '\n'
+
+
+def update_task_artifact_links(file_path: Path, artifact_links: list[str]) -> tuple[dict, str]:
+    text = file_path.read_text(encoding='utf-8')
+    match = re.match(r'^(---\r?\n)(?P<frontmatter>.*?)(\r?\n---\r?\n)(?P<body>.*)$', text, re.DOTALL)
+    if not match:
+        raise HTTPException(status_code=400, detail='Task file is missing YAML frontmatter.')
+
+    frontmatter_data = parse_frontmatter(text)
+    links = list(frontmatter_data.get('artifact_links') or [])
+    for link in artifact_links:
+        if link not in links:
+            links.append(link)
+
+    timestamp = now_iso()
+    frontmatter = replace_frontmatter_field(match.group('frontmatter'), 'artifact_links', yaml_list(links))
+    frontmatter = replace_frontmatter_field(frontmatter, 'last_updated', timestamp)
+    updated_text = f"{match.group(1)}{frontmatter}{match.group(3)}{match.group('body')}"
+
+    try:
+        file_path.write_text(updated_text, encoding='utf-8')
+    except OSError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail='Task file is not writable. In local dev, mount gtm-loop-workspace/tasks as writable.',
+        ) from exc
+
+    task = read_task(file_path)
+    if task.get('id') != file_path.stem:
+        raise HTTPException(status_code=500, detail='Task artifact update failed validation.')
+    if any(link not in (task.get('artifact_links') or []) for link in artifact_links):
+        raise HTTPException(status_code=500, detail='Task artifact links failed validation.')
+    return task, timestamp
+
+
+def create_task_lane_artifacts(
+    file_path: Path,
+    lane: str,
+    overwrite: bool,
+) -> tuple[dict, list[str], list[str], str]:
+    if lane not in LANE_ARTIFACTS:
+        raise HTTPException(status_code=400, detail='artifact lane is not allowed.')
+
+    task = read_task(file_path)
+    task_id = str(task.get('id') or file_path.stem)
+    timestamp = now_iso()
+    created = []
+    skipped = []
+    links = []
+
+    for filename in LANE_ARTIFACTS[lane]:
+        target = artifact_path_for(task_id, lane, filename)
+        link = artifact_link_for(task_id, lane, filename)
+        links.append(link)
+
+        if target.exists() and not overwrite:
+            skipped.append(link)
+            continue
+
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(render_artifact(task, lane, filename, timestamp), encoding='utf-8')
+        except OSError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail='Artifact path is not writable. In local dev, mount gtm-loop-workspace/artifacts as writable.',
+            ) from exc
+        created.append(link)
+
+    updated_task, update_timestamp = update_task_artifact_links(file_path, links)
+    return updated_task, created, skipped, update_timestamp
+
+
 @router.get('/tasks')
 async def get_gtm_loop_tasks(user=Depends(get_verified_user)):
     task_files = sorted(TASKS_DIR.glob('GTM-*.md')) if TASKS_DIR.exists() else []
@@ -500,6 +696,37 @@ async def transition_gtm_loop_task(
             'success': True,
         }
     )
+    task['audit_logged'] = audit_warning is None
+    if audit_warning:
+        task['audit_warning'] = audit_warning
+    return task
+
+
+@router.post('/tasks/{task_id}/artifacts/{lane}')
+async def create_gtm_loop_task_artifacts(
+    task_id: str,
+    lane: str,
+    payload: TaskArtifactCreate | None = None,
+    user=Depends(get_verified_user),
+):
+    file_path = task_file_for_id(task_id)
+    overwrite = payload.overwrite if payload else False
+    task, created, skipped, timestamp = create_task_lane_artifacts(file_path, lane, overwrite)
+    audit_warning = append_artifact_audit_entry(
+        {
+            'timestamp': timestamp,
+            'task_id': task_id,
+            'lane': lane,
+            'files_created': created,
+            'files_skipped': skipped,
+            'actor': actor_from_user(user),
+            'source': '/gtm-loop/board',
+            'endpoint': 'POST /api/gtm-loop/tasks/{task_id}/artifacts/{lane}',
+            'success': True,
+        }
+    )
+    task['files_created'] = created
+    task['files_skipped'] = skipped
     task['audit_logged'] = audit_warning is None
     if audit_warning:
         task['audit_warning'] = audit_warning

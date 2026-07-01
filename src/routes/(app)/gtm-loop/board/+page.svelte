@@ -5,10 +5,12 @@
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import SidebarIcon from '$lib/components/icons/Sidebar.svelte';
 	import {
+		createGtmLoopTaskArtifacts,
 		getGtmLoopTaskAudit,
 		getGtmLoopTasks,
 		transitionGtmLoopTask,
 		updateGtmLoopTaskStatus,
+		type GtmLoopArtifactLane,
 		type GtmLoopTaskAuditEntry,
 		type GtmLoopBoardStatus,
 		type GtmLoopTask,
@@ -41,6 +43,14 @@
 		{ key: 'send-back-for-rework', label: 'Send back for rework' },
 		{ key: 'mark-done', label: 'Mark done' }
 	] satisfies { key: GtmLoopTaskTransition; label: string }[];
+	const laneArtifactOptions = {
+		ricky: { lane: 'research', label: 'Create research artifacts' },
+		brody: { lane: 'requirements', label: 'Create requirements artifacts' },
+		archy: { lane: 'architecture', label: 'Create architecture artifacts' },
+		cody: { lane: 'build', label: 'Create build artifacts' },
+		verifier: { lane: 'verification', label: 'Create verification artifacts' },
+		reporter: { lane: 'report', label: 'Create report artifacts' }
+	} satisfies Record<string, { lane: GtmLoopArtifactLane; label: string }>;
 
 	type ApiState = 'loading' | 'loaded' | 'unauthorized' | 'error';
 	type AuditState = {
@@ -69,6 +79,8 @@
 	let tasksByColumn: Record<string, GtmLoopTask[]> = {};
 	let visibleColumns = columns;
 	let updatingTaskId = '';
+	let draggingTaskId = '';
+	let dragOverStatus = '';
 	let auditByTaskId: Record<string, AuditState> = {};
 
 	type StringFilterField =
@@ -205,6 +217,7 @@
 			}
 			return key !== 'pick-up';
 		});
+	const getLaneArtifactOption = (task: GtmLoopTask) => laneArtifactOptions[task.current_lane];
 
 	const loadTaskAudit = async (taskId: string, force = false) => {
 		const current = auditByTaskId[taskId];
@@ -246,9 +259,45 @@
 			}
 		} catch (err) {
 			toast.error(getErrorDetail(err));
+			await loadTasks();
 		} finally {
 			updatingTaskId = '';
 		}
+	};
+
+	const startDrag = (event: DragEvent, task: GtmLoopTask) => {
+		draggingTaskId = task.id;
+		event.dataTransfer?.setData('text/plain', task.id);
+		if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+	};
+
+	const endDrag = () => {
+		draggingTaskId = '';
+		dragOverStatus = '';
+	};
+
+	const dragOverColumn = (event: DragEvent, boardStatus: GtmLoopBoardStatus) => {
+		if (boardStatus === 'cancelled') return;
+		event.preventDefault();
+		dragOverStatus = boardStatus;
+		if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+	};
+
+	const leaveColumn = (event: DragEvent, boardStatus: GtmLoopBoardStatus) => {
+		if (event.currentTarget instanceof HTMLElement && event.relatedTarget instanceof Node) {
+			if (event.currentTarget.contains(event.relatedTarget)) return;
+		}
+		if (dragOverStatus === boardStatus) dragOverStatus = '';
+	};
+
+	const dropOnColumn = async (event: DragEvent, boardStatus: GtmLoopBoardStatus) => {
+		if (boardStatus === 'cancelled') return;
+		event.preventDefault();
+		const taskId = event.dataTransfer?.getData('text/plain') || draggingTaskId;
+		endDrag();
+		const task = tasks.find((candidate) => candidate.id === taskId);
+		if (!task || task.board_status === boardStatus) return;
+		await updateTaskStatus(task, boardStatus);
 	};
 
 	const transitionTask = async (task: GtmLoopTask, transition: GtmLoopTaskTransition) => {
@@ -263,6 +312,35 @@
 				toast.warning(`${task.id} transitioned; ${updated.audit_warning}`);
 			} else {
 				toast.success(`Transitioned ${task.id}: ${formatLabel(transition)}.`);
+			}
+		} catch (err) {
+			toast.error(getErrorDetail(err));
+		} finally {
+			updatingTaskId = '';
+		}
+	};
+
+	const createLaneArtifacts = async (task: GtmLoopTask) => {
+		const option = getLaneArtifactOption(task);
+		if (!option) return;
+
+		updatingTaskId = task.id;
+		try {
+			const updated = await createGtmLoopTaskArtifacts(
+				localStorage.token ?? '',
+				task.id,
+				option.lane
+			);
+			await loadTasks();
+
+			const created = updated.files_created?.length ?? 0;
+			const skipped = updated.files_skipped?.length ?? 0;
+			if (updated.audit_warning) {
+				toast.warning(`${task.id} artifacts updated; ${updated.audit_warning}`);
+			} else if (created > 0) {
+				toast.success(`Created ${created} ${formatLabel(option.lane)} artifact${created === 1 ? '' : 's'} for ${task.id}.`);
+			} else if (skipped > 0) {
+				toast.warning(`${formatLabel(option.lane)} artifacts already exist for ${task.id}; no files overwritten.`);
 			}
 		} catch (err) {
 			toast.error(getErrorDetail(err));
@@ -623,10 +701,22 @@
 				</section>
 			{/if}
 
+			{#if apiState === 'loaded'}
+				<div class="text-xs text-gray-500">
+					{$i18n.t('Drag cards between columns to update board status only. Lane and gate changes stay in card details.')}
+				</div>
+			{/if}
+
 			<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
 				{#each visibleColumns as column}
 					<section
-						class="flex min-h-[24rem] flex-col rounded-lg border border-gray-100 bg-white dark:border-gray-850 dark:bg-gray-900"
+						class="flex min-h-[24rem] flex-col rounded-lg border bg-white transition dark:bg-gray-900 {dragOverStatus === column.key
+							? 'border-black ring-2 ring-black/10 dark:border-white dark:ring-white/20'
+							: 'border-gray-100 dark:border-gray-850'}"
+						on:dragover={(event) => dragOverColumn(event, column.key)}
+						on:dragenter={(event) => dragOverColumn(event, column.key)}
+						on:dragleave={(event) => leaveColumn(event, column.key)}
+						on:drop={(event) => dropOnColumn(event, column.key)}
 					>
 						<div class="flex items-center justify-between border-b border-gray-100 px-3 py-2 dark:border-gray-850">
 							<div class="text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -653,7 +743,12 @@
 							{:else}
 								{#each tasksByColumn[column.key] ?? [] as task}
 									<article
-										class="rounded-lg border border-gray-100 bg-gray-50 p-3 text-sm dark:border-gray-800 dark:bg-gray-850"
+										class="rounded-lg border border-gray-100 bg-gray-50 p-3 text-sm transition dark:border-gray-800 dark:bg-gray-850 {draggingTaskId === task.id
+											? 'opacity-60'
+											: 'cursor-grab active:cursor-grabbing'}"
+										draggable={updatingTaskId !== task.id}
+										on:dragstart={(event) => startDrag(event, task)}
+										on:dragend={endDrag}
 									>
 										<div class="flex items-start justify-between gap-2">
 											<div class="min-w-0">
@@ -776,6 +871,25 @@
 														<div class="mt-1 text-xs text-gray-500">{$i18n.t('Updating task...')}</div>
 													{/if}
 												</div>
+
+												{#if getLaneArtifactOption(task)}
+													<div>
+														<div class="font-medium text-gray-500">Lane artifacts</div>
+														<div class="mt-2">
+															<button
+																type="button"
+																class="rounded-lg bg-gray-100 px-2.5 py-1.5 text-xs font-medium text-gray-800 transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-gray-850 dark:text-gray-200 dark:hover:bg-gray-800"
+																disabled={updatingTaskId === task.id}
+																on:click={() => createLaneArtifacts(task)}
+															>
+																{getLaneArtifactOption(task)?.label}
+															</button>
+														</div>
+														<div class="mt-1 text-gray-500">
+															Creates local Markdown starters only. Existing files are skipped.
+														</div>
+													</div>
+												{/if}
 
 												<div>
 													<div class="font-medium text-gray-500">Manager request</div>

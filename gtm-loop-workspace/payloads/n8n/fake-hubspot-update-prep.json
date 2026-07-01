@@ -1,0 +1,19 @@
+{
+  "purpose": "Fake HubSpot update preparation output. This is not a CRM write.",
+  "source_system": "n8n",
+  "target_system": "hubspot",
+  "sensitivity": "fake",
+  "redacted": true,
+  "operation": "prepare_update_only",
+  "object": "contact",
+  "external_id": "fake-contact-001",
+  "properties": {
+    "email": "buyer@example.invalid",
+    "lifecyclestage": "marketingqualifiedlead",
+    "last_gong_call_date": "2026-07-01",
+    "ai_summary": "Fake summary for field mapping validation."
+  },
+  "write_allowed": false,
+  "approval_required": true
+}
+

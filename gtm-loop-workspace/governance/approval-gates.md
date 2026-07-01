@@ -7,6 +7,9 @@ Actions requiring explicit human approval before execution.
 | Action | Approval Required | Minimum Approval Text |
 | --- | --- | --- |
 | Activate or enable production n8n workflow | Always | Workflow name, environment, trigger, expected effect. |
+| Create or update live n8n workflow | Always | Workflow name, environment, draft source, trigger, expected effect. |
+| Expose or call live n8n webhook | Always | Webhook name/path, environment, caller, expected payload class. |
+| Use real n8n credentials | Always | Credential name, scope, owner, workflow affected. |
 | Retry production workflow execution | Always | Execution ID/name, idempotency check, expected writes. |
 | Create/update/delete HubSpot record | Always | Object, fields, record scope, rollback/repair plan. |
 | Send email or external message | Always | Audience, content, sender, timing. |
@@ -21,6 +24,7 @@ Actions requiring explicit human approval before execution.
 | --- | --- |
 | Edit Markdown in this workspace | No secrets or raw customer data. |
 | Draft workflow specs or prompts | No external writes. |
+| Draft local n8n workflow Markdown/JSON | Fake/redacted payloads only; no live workflow mutation or activation. |
 | Create fake/redacted payloads | No real customer data. |
 | Inspect local docs/source | Read-only and within allowed workspace. |
 | Update board/run ledger | No sensitive values. |

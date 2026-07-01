@@ -30,9 +30,9 @@ The Open WebUI routes are:
 - `/gtm-loop`: cockpit dashboard.
 - `/gtm-loop/board`: read-only Kanban board.
 
-The board reads these task files through `GET /api/gtm-loop/tasks`. Manager status moves use `PATCH /api/gtm-loop/tasks/{task_id}/status` and may update only `board_status` and `last_updated` in YAML frontmatter. Orchestrator swimlane/gate transitions use `PATCH /api/gtm-loop/tasks/{task_id}/transition` and may update only the safe transition fields needed for the selected lane/gate. Successful moves append a JSONL audit entry to `_audit/status-changes.jsonl`. Card details read latest task changes through `GET /api/gtm-loop/tasks/{task_id}/audit`. Search and filters on `/gtm-loop/board` are client-side only and do not change task files, `board.md`, or the API response.
+The board reads these task files through `GET /api/gtm-loop/tasks`. Manager status moves and drag/drop use `PATCH /api/gtm-loop/tasks/{task_id}/status` and may update only `board_status` and `last_updated` in YAML frontmatter. Drag/drop does not change `current_lane`, `current_phase`, or `current_gate`; use explicit orchestrator transition buttons for those fields. Moving to `done` through the status endpoint is blocked unless the task is unblocked, does not need rework, has any required approval approved, and is already in reporter/manager review state. Orchestrator swimlane/gate transitions use `PATCH /api/gtm-loop/tasks/{task_id}/transition` and may update only the safe transition fields needed for the selected lane/gate. Lane artifacts use `POST /api/gtm-loop/tasks/{task_id}/artifacts/{lane}` and may create deterministic Markdown starters only under `../artifacts/<task_id>/`, then update `artifact_links` and `last_updated`. Successful moves append a JSONL audit entry to `_audit/status-changes.jsonl`; artifact creation appends to `_audit/artifact-events.jsonl`. Card details read latest task changes through `GET /api/gtm-loop/tasks/{task_id}/audit`. Search and filters on `/gtm-loop/board` are client-side only and do not change task files, `board.md`, or the API response.
 
-In local Docker development, `docker-compose.override.yaml` bind-mounts this workspace into the container at `/app/gtm-loop-workspace` as read-only, then overlays `tasks/` as writable for status-only updates and `_audit/status-changes.jsonl`. Production mode may still use the image-baked copy of the workspace.
+In local Docker development, `docker-compose.override.yaml` bind-mounts this workspace into the container at `/app/gtm-loop-workspace` as read-only, then overlays only `tasks/` and `artifacts/` as writable. Production mode may still use the image-baked copy of the workspace.
 
 ## Status Audit
 
@@ -53,6 +53,8 @@ Each line records:
 
 It does not log task bodies, secrets, credentials, cookies, auth headers, or external payloads. The read-only audit endpoint returns only matching entries for one task, latest first. It is not the main run ledger; use `../runs/index.md` for meaningful workbench runs.
 
+`_audit/artifact-events.jsonl` records local artifact creation events with timestamp, task id, lane, files created, files skipped, actor, source, endpoint, and success. It does not log artifact bodies or external payloads.
+
 ## Browser Smoke Test
 
 1. Log in to Open WebUI.
@@ -60,16 +62,18 @@ It does not log task bodies, secrets, credentials, cookies, auth headers, or ext
 3. Confirm the status panel says `API: loaded` and task count is `11`.
 4. Search for `GTM-001` and confirm only matching cards remain.
 5. Use the `Blocked` quick filter, confirm non-matching cards are hidden, and then clear filters.
-6. Move one test task from `planned` to `in-progress`, then back to `planned`.
+6. Move one test task from `planned` to `in-progress`, then back to `planned` using the dropdown or drag/drop.
 7. Open card details and run `Pick up task`, `Send to Archy`, `Send to Verifier`, and `Send to Reporter`.
 8. Confirm manager status moves changed only `board_status` and `last_updated`.
 9. Confirm orchestrator transitions changed only lane/gate/status frontmatter and `last_updated`.
-10. Confirm audit entries were appended to `_audit/status-changes.jsonl`.
-11. Restore the test task to its original state if needed.
-12. Open card details and confirm latest task changes display.
-13. Run `node scripts\validate-gtm-tasks.js`.
+10. Create lane artifacts and confirm files appear under `../artifacts/<task_id>/`.
+11. Confirm `artifact_links` and `_audit/artifact-events.jsonl` were updated.
+12. Confirm audit entries were appended to `_audit/status-changes.jsonl`.
+13. Restore the test task to its original state if needed.
+14. Open card details and confirm latest task changes display.
+15. Run `node scripts\validate-gtm-tasks.js`.
 
-The board has only narrow status/transition writes and task-local audit appends. Task title, body, manager request, evidence, artifacts, credentials, and external system fields still happen in Markdown files, not in the UI.
+The board has only narrow status/transition writes, status-only drag/drop, deterministic artifact starter creation, and task-local audit appends. Task title, body, manager request, evidence, credentials, and external system fields still happen in Markdown files, not in the UI.
 
 ## Board Mapping
 
@@ -93,6 +97,8 @@ The board has only narrow status/transition writes and task-local audit appends.
 | Cody/Codex | Implementation, build, and workflow construction. |
 | Verifier | Smoke tests, validation, drift checks, and definition-of-done checks. |
 | Reporter | Board summaries, run ledger updates, and manager reports. |
+
+For Cody/build work, n8n MCP is draft-only and approval-gated. Agents may create local workflow draft artifacts and validate fake payloads, but must not create/update live workflows, activate workflows, call production webhooks, use credentials, or write HubSpot/Gong/AirOps/custom API data without explicit approval.
 
 ## Agent Update Order
 

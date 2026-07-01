@@ -84,6 +84,21 @@ export type GtmLoopTaskTransitionResponse = GtmLoopTask & {
 	audit_warning?: string;
 };
 
+export type GtmLoopArtifactLane =
+	| 'research'
+	| 'requirements'
+	| 'architecture'
+	| 'build'
+	| 'verification'
+	| 'report';
+
+export type GtmLoopTaskArtifactsResponse = GtmLoopTask & {
+	files_created: string[];
+	files_skipped: string[];
+	audit_logged?: boolean;
+	audit_warning?: string;
+};
+
 export type GtmLoopTaskAuditEntry = {
 	timestamp: string;
 	task_id: string;
@@ -179,6 +194,37 @@ export const transitionGtmLoopTask = async (
 
 	if (!res.ok) {
 		let detail = res.statusText || 'Unable to transition GTM task.';
+		try {
+			const body = await res.json();
+			detail = body.detail ?? detail;
+		} catch {
+			// Keep the status text fallback.
+		}
+
+		throw { status: res.status, detail } satisfies GtmLoopApiError;
+	}
+
+	return res.json();
+};
+
+export const createGtmLoopTaskArtifacts = async (
+	token: string,
+	taskId: string,
+	lane: GtmLoopArtifactLane,
+	overwrite: boolean = false
+): Promise<GtmLoopTaskArtifactsResponse> => {
+	const res = await fetch(`${WEBUI_BASE_URL}/api/gtm-loop/tasks/${taskId}/artifacts/${lane}`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		},
+		body: JSON.stringify({ overwrite })
+	});
+
+	if (!res.ok) {
+		let detail = res.statusText || 'Unable to create GTM task artifacts.';
 		try {
 			const body = await res.json();
 			detail = body.detail ?? detail;

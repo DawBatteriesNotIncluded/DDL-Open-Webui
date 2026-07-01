@@ -1,0 +1,36 @@
+{
+  "purpose": "Fake Gong call-completed webhook input for n8n workflow drafting.",
+  "source_system": "gong",
+  "target_workflow": "n8n-draft-call-follow-up",
+  "sensitivity": "fake",
+  "redacted": true,
+  "event_id": "fake-gong-event-001",
+  "event_type": "gong.call.completed",
+  "occurred_at": "2026-07-01T09:30:00Z",
+  "call": {
+    "id": "fake-call-001",
+    "title": "Fake discovery call",
+    "participants": [
+      {
+        "name": "Example Seller",
+        "email": "seller@example.invalid",
+        "role": "seller"
+      },
+      {
+        "name": "Example Buyer",
+        "email": "buyer@example.invalid",
+        "role": "buyer"
+      }
+    ],
+    "transcript_summary": "Fake summary only. No real transcript text.",
+    "trackers": [
+      "pricing",
+      "integration-risk"
+    ]
+  },
+  "deal_context": {
+    "company_id": "fake-company-001",
+    "deal_id": "fake-deal-001"
+  }
+}
+

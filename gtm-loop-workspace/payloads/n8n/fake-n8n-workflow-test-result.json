@@ -1,0 +1,26 @@
+{
+  "purpose": "Fake n8n workflow draft validation result.",
+  "source_system": "n8n",
+  "target_workflow": "n8n-draft-call-follow-up",
+  "sensitivity": "fake",
+  "redacted": true,
+  "workflow_draft_id": "draft-workflow-001",
+  "test_run_id": "fake-test-run-001",
+  "input_payload_ref": "payloads/n8n/fake-gong-webhook.json",
+  "result": "passed",
+  "node_results": [
+    {
+      "node": "Webhook Trigger",
+      "status": "passed",
+      "note": "Accepted fake payload shape."
+    },
+    {
+      "node": "Prepare HubSpot Update",
+      "status": "passed",
+      "note": "Prepared update body only; no CRM write performed."
+    }
+  ],
+  "external_writes_performed": false,
+  "activation_allowed": false
+}
+
