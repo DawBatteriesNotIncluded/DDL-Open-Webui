@@ -68,11 +68,34 @@ export type GtmLoopTaskStatusResponse = GtmLoopTask & {
 	audit_warning?: string;
 };
 
+export type GtmLoopTaskTransition =
+	| 'pick-up'
+	| 'move-to-ricky'
+	| 'move-to-brody'
+	| 'move-to-archy'
+	| 'move-to-cody'
+	| 'move-to-verifier'
+	| 'move-to-reporter'
+	| 'send-back-for-rework'
+	| 'mark-done';
+
+export type GtmLoopTaskTransitionResponse = GtmLoopTask & {
+	audit_logged?: boolean;
+	audit_warning?: string;
+};
+
 export type GtmLoopTaskAuditEntry = {
 	timestamp: string;
 	task_id: string;
 	old_board_status: string;
 	new_board_status: string;
+	transition: string;
+	old_lane: string;
+	new_lane: string;
+	old_phase: string;
+	new_phase: string;
+	old_gate: string;
+	new_gate: string;
 	actor: string;
 	source: string;
 	endpoint: string;
@@ -126,6 +149,36 @@ export const updateGtmLoopTaskStatus = async (
 
 	if (!res.ok) {
 		let detail = res.statusText || 'Unable to update GTM task status.';
+		try {
+			const body = await res.json();
+			detail = body.detail ?? detail;
+		} catch {
+			// Keep the status text fallback.
+		}
+
+		throw { status: res.status, detail } satisfies GtmLoopApiError;
+	}
+
+	return res.json();
+};
+
+export const transitionGtmLoopTask = async (
+	token: string,
+	taskId: string,
+	transition: GtmLoopTaskTransition
+): Promise<GtmLoopTaskTransitionResponse> => {
+	const res = await fetch(`${WEBUI_BASE_URL}/api/gtm-loop/tasks/${taskId}/transition`, {
+		method: 'PATCH',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		},
+		body: JSON.stringify({ transition })
+	});
+
+	if (!res.ok) {
+		let detail = res.statusText || 'Unable to transition GTM task.';
 		try {
 			const body = await res.json();
 			detail = body.detail ?? detail;

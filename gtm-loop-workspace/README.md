@@ -64,7 +64,7 @@ Existing folders such as `agents/`, `build-system/`, `evals/`, `knowledge/`, `lo
 
 Detailed loop state stays inside task files. `Blocked`, `Approval Required`, and `Rework Needed` are task flags, not board columns.
 
-`/gtm-loop` is the Open WebUI cockpit dashboard. `/gtm-loop/board` is the visual Kanban board over the local task files. It has one narrow write path: logged-in users may update `board_status`, which also refreshes `last_updated`. Full card editing and external actions remain blocked.
+`/gtm-loop` is the Open WebUI cockpit dashboard. `/gtm-loop/board` is the visual Kanban board over the local task files. It has narrow local write paths for manager status moves and orchestrator swimlane/gate transitions. Full card editing and external actions remain blocked.
 
 ## Task Validation
 
@@ -83,9 +83,9 @@ Future frontend board work should read only from valid task files. Task validati
 | Route | Use |
 | --- | --- |
 | `/gtm-loop` | Cockpit dashboard with task counts, safety posture, starter prompt, and links. |
-| `/gtm-loop/board` | Kanban board grouped by `board_status` from `tasks/*.md`, with client-side search, filters, status-only task updates, and latest status audit in card details. |
+| `/gtm-loop/board` | Kanban board grouped by `board_status` from `tasks/*.md`, with client-side search, filters, status moves, swimlane/gate transitions, and latest task audit in card details. |
 
-The board loads task metadata through `GET /api/gtm-loop/tasks`. Status moves use `PATCH /api/gtm-loop/tasks/{task_id}/status` and may change only `board_status` and `last_updated` in YAML frontmatter. Successful status moves append a local JSONL audit entry to `tasks/_audit/status-changes.jsonl`. Card details read the latest status changes through `GET /api/gtm-loop/tasks/{task_id}/audit`. It does not edit title, body, artifacts, manager request, evidence, credentials, or external system fields. It does not call external APIs or connect to n8n. Search and filters run client-side in the browser over the loaded task list.
+The board loads task metadata through `GET /api/gtm-loop/tasks`. Manager status moves use `PATCH /api/gtm-loop/tasks/{task_id}/status` and may change only `board_status` and `last_updated` in YAML frontmatter. Orchestrator progression uses `PATCH /api/gtm-loop/tasks/{task_id}/transition` and may change only the required safe lane/gate fields plus `last_updated`. Successful moves append a local JSONL audit entry to `tasks/_audit/status-changes.jsonl`. Card details read the latest task changes through `GET /api/gtm-loop/tasks/{task_id}/audit`. It does not edit title, body, artifacts, manager request, evidence, credentials, or external system fields. It does not call external APIs or connect to n8n. Search and filters run client-side in the browser over the loaded task list.
 
 In local Docker development, `docker-compose.override.yaml` mounts `./gtm-loop-workspace` into `/app/gtm-loop-workspace` read-only and overlays `./gtm-loop-workspace/tasks` as writable for status-only task updates and the task-local audit log. The `Dockerfile` still packages the workspace for image-baked runs where the override is not used.
 
@@ -100,9 +100,11 @@ Manual board smoke test:
 7. Clear filters and confirm all task cards return.
 8. Move one test task from `planned` to `in-progress`, then back to `planned`.
 9. Confirm only `board_status` and `last_updated` changed in task frontmatter.
-10. Confirm two entries were appended to `tasks/_audit/status-changes.jsonl`.
-11. Open the task card details and confirm latest status changes display.
-12. Run `node scripts\validate-gtm-tasks.js`.
+10. Open card details and use `Pick up task`, `Send to Archy`, `Send to Verifier`, and `Send to Reporter`.
+11. Confirm transition entries were appended to `tasks/_audit/status-changes.jsonl`.
+12. Restore the test task to its original state if needed.
+13. Open the task card details and confirm latest task changes display.
+14. Run `node scripts\validate-gtm-tasks.js`.
 
 ## Evidence Labels
 
@@ -165,8 +167,8 @@ Use `UPDATE-OWNERSHIP.md` when deciding where to write. Short version:
 
 ## Do Not Automate Yet
 
-No external API writes, workflow activation, email sending, credential changes, production retries, or destructive operations from this workbench without explicit approval for the exact action. The only local write path is status-only task frontmatter updates plus task-local status audit entries.
+No external API writes, workflow activation, email sending, credential changes, production retries, or destructive operations from this workbench without explicit approval for the exact action. The only local write paths are task frontmatter status/lane/gate transitions plus task-local audit entries.
 
 ## Status Audit
 
-`tasks/_audit/status-changes.jsonl` records local status transitions only. Each line includes timestamp, task id, old status, new status, actor when available, source, endpoint, and success. `GET /api/gtm-loop/tasks/{task_id}/audit` returns the latest matching entries for one task only. It does not store or return task bodies, secrets, credentials, cookies, auth headers, or external system payloads. Use `runs/index.md` for meaningful workbench runs; the JSONL file is only a lightweight transition audit.
+`tasks/_audit/status-changes.jsonl` records local status and orchestrator transition changes only. Each line includes timestamp, task id, old/new status, old/new lane/phase/gate when present, actor when available, source, endpoint, and success. `GET /api/gtm-loop/tasks/{task_id}/audit` returns the latest matching entries for one task only. It does not store or return task bodies, secrets, credentials, cookies, auth headers, or external system payloads. Use `runs/index.md` for meaningful workbench runs; the JSONL file is only a lightweight transition audit.

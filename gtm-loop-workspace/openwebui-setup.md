@@ -53,13 +53,13 @@ The GTM Loop route is available at:
 http://localhost:3000/gtm-loop
 ```
 
-The read-only GTM Loop Kanban board is available at:
+The GTM Loop Kanban board is available at:
 
 ```text
 http://localhost:3000/gtm-loop/board
 ```
 
-`/gtm-loop` is the cockpit dashboard. `/gtm-loop/board` is a visual board over `gtm-loop-workspace/tasks/*.md`; task files remain the source of truth. Board search and filters are client-side only over the task list returned by `GET /api/gtm-loop/tasks`. Status moves use a narrow authenticated PATCH endpoint that may update only `board_status` and `last_updated`, then append a local audit entry under `tasks/_audit/status-changes.jsonl`. Card details use `GET /api/gtm-loop/tasks/{task_id}/audit` to show the latest matching status changes.
+`/gtm-loop` is the cockpit dashboard. `/gtm-loop/board` is a visual board over `gtm-loop-workspace/tasks/*.md`; task files remain the source of truth. Board search and filters are client-side only over the task list returned by `GET /api/gtm-loop/tasks`. Manager status moves use a narrow authenticated PATCH endpoint that may update only `board_status` and `last_updated`. Orchestrator transitions use a separate narrow authenticated PATCH endpoint for swimlane/gate progression. Both append local audit entries under `tasks/_audit/status-changes.jsonl`. Card details use `GET /api/gtm-loop/tasks/{task_id}/audit` to show the latest matching task changes.
 
 Use the existing compose stack:
 
@@ -103,7 +103,7 @@ Start with Knowledge-only. Add n8n, HubSpot, Gong, AirOps, API, or repo tools on
 8. Run the Loop Engineering Workstation Agent.
 9. Log the result in `runs/index.md`.
 
-Full card editing, drag/drop, and broad task writes are intentionally deferred. The only UI write path is changing task `board_status`, which also updates `last_updated` and appends a local status audit entry.
+Full card editing, drag/drop, and broad task writes are intentionally deferred. The UI write paths are limited to manager status movement and orchestrator swimlane/gate transitions, both scoped to task frontmatter plus local audit.
 
 ## Manual UI Smoke Test
 
@@ -116,10 +116,13 @@ Full card editing, drag/drop, and broad task writes are intentionally deferred. 
 7. Try quick filters: `Blocked`, `Approval Required`, `Rework Needed`, `In Review`, and `Smoke Test`; confirm non-matching cards are hidden.
 8. Clear filters and confirm all cards return.
 9. Move one test task from `planned` to `in-progress`, then back to `planned`.
-10. Confirm only `board_status` and `last_updated` changed in task frontmatter.
-11. Confirm two entries were appended to `gtm-loop-workspace/tasks/_audit/status-changes.jsonl`.
-12. Open task card details and confirm latest status changes display.
-13. Run `node scripts\validate-gtm-tasks.js`.
+10. Open task details and run `Pick up task`, `Send to Archy`, `Send to Verifier`, and `Send to Reporter`.
+11. Confirm status moves changed only `board_status` and `last_updated`.
+12. Confirm orchestrator transitions changed only lane/gate/status frontmatter and `last_updated`.
+13. Confirm entries were appended to `gtm-loop-workspace/tasks/_audit/status-changes.jsonl`.
+14. Restore the test task to its original state if needed.
+15. Open task card details and confirm latest task changes display.
+16. Run `node scripts\validate-gtm-tasks.js`.
 
 If the status panel says `unauthorized`, log in to Open WebUI and refresh. The GTM task API is intentionally authenticated.
 

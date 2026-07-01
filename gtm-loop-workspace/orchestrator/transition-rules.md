@@ -29,6 +29,28 @@ Use task frontmatter flags instead:
 | Reporter or manager gate | `current_lane: reporter`, `board_status: in-review` | In Review |
 | Completed and accepted | `board_status: done` | Done |
 
+## UI Transition Paths
+
+`PATCH /api/gtm-loop/tasks/{task_id}/status` is for manager board movement. It may update only `board_status` and `last_updated`.
+
+`PATCH /api/gtm-loop/tasks/{task_id}/transition` is for orchestrator swimlane/gate progression. It may update only the safe frontmatter fields needed for the selected transition plus `last_updated`.
+
+Allowed orchestrator transitions:
+
+| Transition | Lane | Phase | Gate | Board status |
+| --- | --- | --- | --- | --- |
+| `pick-up` | `brody` | `requirements` | `requirements-accepted` | `in-progress` |
+| `move-to-ricky` | `ricky` | `research` | `research-accepted` | `in-progress` |
+| `move-to-brody` | `brody` | `requirements` | `requirements-accepted` | `in-progress` |
+| `move-to-archy` | `archy` | `architecture` | `architecture-accepted` | `in-progress` |
+| `move-to-cody` | `cody` | `build` | `build-complete` | `in-progress` |
+| `move-to-verifier` | `verifier` | `smoke-test` | `smoke-test-passed` | `smoke-test` |
+| `move-to-reporter` | `reporter` | `report` | `manager-review` | `in-review` |
+| `mark-done` | `manager` | `done` | `done` | `done` |
+| `send-back-for-rework` | `cody` | `rework` | `build-complete` | `in-progress` |
+
+Transition writes append local audit entries under `tasks/_audit/status-changes.jsonl`. They do not call external systems, activate workflows, or write credentials.
+
 ## Required Conditions
 
 | From | To | Required Before Move |

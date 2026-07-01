@@ -7,10 +7,12 @@
 	import {
 		getGtmLoopTaskAudit,
 		getGtmLoopTasks,
+		transitionGtmLoopTask,
 		updateGtmLoopTaskStatus,
 		type GtmLoopTaskAuditEntry,
 		type GtmLoopBoardStatus,
-		type GtmLoopTask
+		type GtmLoopTask,
+		type GtmLoopTaskTransition
 	} from '$lib/apis/gtm-loop';
 	import { toast } from 'svelte-sonner';
 
@@ -28,6 +30,17 @@
 		label: string;
 	};
 	const statusOptions = [...columns, cancelledColumn];
+	const transitionOptions = [
+		{ key: 'pick-up', label: 'Pick up task' },
+		{ key: 'move-to-ricky', label: 'Send to Ricky' },
+		{ key: 'move-to-brody', label: 'Send to Brody' },
+		{ key: 'move-to-archy', label: 'Send to Archy' },
+		{ key: 'move-to-cody', label: 'Send to Cody' },
+		{ key: 'move-to-verifier', label: 'Send to Verifier' },
+		{ key: 'move-to-reporter', label: 'Send to Reporter' },
+		{ key: 'send-back-for-rework', label: 'Send back for rework' },
+		{ key: 'mark-done', label: 'Mark done' }
+	] satisfies { key: GtmLoopTaskTransition; label: string }[];
 
 	type ApiState = 'loading' | 'loaded' | 'unauthorized' | 'error';
 	type AuditState = {
@@ -177,6 +190,21 @@
 	const asList = (value: string[] | null | undefined) => value ?? [];
 	const textOrFallback = (value: string | null | undefined, fallback = 'None recorded.') =>
 		value && value.trim() ? value : fallback;
+	const getTaskTransitions = (task: GtmLoopTask) =>
+		transitionOptions.filter(({ key }) => {
+			if (task.board_status === 'done' || task.board_status === 'cancelled') return false;
+			if (task.board_status === 'planned') return key === 'pick-up';
+			if (key === 'pick-up') return task.board_status === 'planned';
+			if (key === 'mark-done') {
+				return (
+					!task.blocked &&
+					(task.current_lane === 'reporter' ||
+						task.current_lane === 'manager' ||
+						task.board_status === 'in-review')
+				);
+			}
+			return key !== 'pick-up';
+		});
 
 	const loadTaskAudit = async (taskId: string, force = false) => {
 		const current = auditByTaskId[taskId];
@@ -215,6 +243,26 @@
 				toast.warning(`${task.id} moved; ${updated.audit_warning}`);
 			} else {
 				toast.success(`Moved ${task.id} to ${formatLabel(boardStatus)} and logged audit entry.`);
+			}
+		} catch (err) {
+			toast.error(getErrorDetail(err));
+		} finally {
+			updatingTaskId = '';
+		}
+	};
+
+	const transitionTask = async (task: GtmLoopTask, transition: GtmLoopTaskTransition) => {
+		updatingTaskId = task.id;
+		try {
+			const updated = await transitionGtmLoopTask(localStorage.token ?? '', task.id, transition);
+			await loadTasks();
+			if (auditByTaskId[task.id]?.state === 'loaded') {
+				await loadTaskAudit(task.id, true);
+			}
+			if (updated.audit_warning) {
+				toast.warning(`${task.id} transitioned; ${updated.audit_warning}`);
+			} else {
+				toast.success(`Transitioned ${task.id}: ${formatLabel(transition)}.`);
 			}
 		} catch (err) {
 			toast.error(getErrorDetail(err));
@@ -319,7 +367,7 @@
 							{$i18n.t('GTM Loop Board')}
 						</h1>
 						<div class="truncate text-xs text-gray-500">
-							{$i18n.t('Read-only view of gtm-loop-workspace/tasks/*.md')}
+							{$i18n.t('Task-file control plane for gtm-loop-workspace/tasks/*.md')}
 						</div>
 					</div>
 				</div>
@@ -711,6 +759,25 @@
 												</div>
 
 												<div>
+													<div class="font-medium text-gray-500">Orchestrator transitions</div>
+													<div class="mt-2 flex flex-wrap gap-1.5">
+														{#each getTaskTransitions(task) as transition}
+															<button
+																type="button"
+																class="rounded-lg bg-gray-100 px-2.5 py-1.5 text-xs font-medium text-gray-800 transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-gray-850 dark:text-gray-200 dark:hover:bg-gray-800"
+																disabled={updatingTaskId === task.id}
+																on:click={() => transitionTask(task, transition.key)}
+															>
+																{transition.label}
+															</button>
+														{/each}
+													</div>
+													{#if updatingTaskId === task.id}
+														<div class="mt-1 text-xs text-gray-500">{$i18n.t('Updating task...')}</div>
+													{/if}
+												</div>
+
+												<div>
 													<div class="font-medium text-gray-500">Manager request</div>
 													<div class="mt-1">{textOrFallback(task.manager_request || task.body_sections?.manager_request)}</div>
 												</div>
@@ -793,11 +860,22 @@
 															{#each auditByTaskId[task.id]?.entries ?? [] as entry}
 																<div class="rounded bg-gray-50 px-2 py-2 dark:bg-gray-850">
 																	<div class="font-mono text-[11px] text-gray-500">{entry.timestamp}</div>
+																	{#if entry.transition}
+																		<div class="mt-1 font-medium">
+																			{formatLabel(entry.transition)}
+																		</div>
+																	{/if}
 																	<div class="mt-1">
 																		{formatLabel(entry.old_board_status)} -> {formatLabel(
 																			entry.new_board_status
 																		)}
 																	</div>
+																	{#if entry.new_lane || entry.new_phase || entry.new_gate}
+																		<div class="mt-1 text-gray-500">
+																			{formatLabel(entry.old_lane)} -> {formatLabel(entry.new_lane)}
+																			/ {formatLabel(entry.new_phase || entry.new_gate)}
+																		</div>
+																	{/if}
 																	<div class="mt-1 text-gray-500">
 																		{textOrFallback(entry.actor, 'Unknown actor')} via
 																		{textOrFallback(entry.source, 'unknown source')}

@@ -75,10 +75,67 @@ BOARD_COLUMNS = {
 }
 ALLOWED_BOARD_STATUSES = set(BOARD_COLUMNS) | {'cancelled'}
 TASK_ID_RE = re.compile(r'^GTM-\d+$')
+TRANSITION_UPDATES = {
+    'pick-up': {
+        'board_status': 'in-progress',
+        'current_lane': 'brody',
+        'current_phase': 'requirements',
+        'current_gate': 'requirements-accepted',
+        'next_action': 'Run Brody investigation / requirements lane.',
+        'manager_summary': 'Task picked up by GTM Engineer Orchestrator.',
+    },
+    'move-to-ricky': {
+        'board_status': 'in-progress',
+        'current_lane': 'ricky',
+        'current_phase': 'research',
+        'current_gate': 'research-accepted',
+    },
+    'move-to-brody': {
+        'board_status': 'in-progress',
+        'current_lane': 'brody',
+        'current_phase': 'requirements',
+        'current_gate': 'requirements-accepted',
+    },
+    'move-to-archy': {
+        'board_status': 'in-progress',
+        'current_lane': 'archy',
+        'current_phase': 'architecture',
+        'current_gate': 'architecture-accepted',
+    },
+    'move-to-cody': {
+        'board_status': 'in-progress',
+        'current_lane': 'cody',
+        'current_phase': 'build',
+        'current_gate': 'build-complete',
+    },
+    'move-to-verifier': {
+        'board_status': 'smoke-test',
+        'current_lane': 'verifier',
+        'current_phase': 'smoke-test',
+        'current_gate': 'smoke-test-passed',
+    },
+    'move-to-reporter': {
+        'board_status': 'in-review',
+        'current_lane': 'reporter',
+        'current_phase': 'report',
+        'current_gate': 'manager-review',
+    },
+    'mark-done': {
+        'board_status': 'done',
+        'current_lane': 'manager',
+        'current_phase': 'done',
+        'current_gate': 'done',
+    },
+}
+ALLOWED_TRANSITIONS = set(TRANSITION_UPDATES) | {'send-back-for-rework'}
 
 
 class TaskStatusUpdate(BaseModel):
     board_status: str
+
+
+class TaskTransitionUpdate(BaseModel):
+    transition: str
 
 
 def now_iso() -> str:
@@ -209,13 +266,13 @@ def replace_frontmatter_field(frontmatter: str, field: str, value: str) -> str:
     return f'{frontmatter.rstrip()}\n{field}: {value}\n'
 
 
-def append_status_audit_entry(entry: dict) -> str | None:
+def append_task_audit_entry(entry: dict) -> str | None:
     try:
         STATUS_AUDIT_LOG.parent.mkdir(parents=True, exist_ok=True)
         with STATUS_AUDIT_LOG.open('a', encoding='utf-8') as audit_file:
             audit_file.write(json.dumps(entry, separators=(',', ':')) + '\n')
     except OSError:
-        return 'Status updated, but local audit append failed.'
+        return 'Task updated, but local audit append failed.'
     return None
 
 
@@ -239,6 +296,13 @@ def read_status_audit_entries(task_id: str, limit: int) -> list[dict]:
                 'task_id': str(entry.get('task_id', '')),
                 'old_board_status': str(entry.get('old_board_status', '')),
                 'new_board_status': str(entry.get('new_board_status', '')),
+                'transition': str(entry.get('transition', '')),
+                'old_lane': str(entry.get('old_lane', '')),
+                'new_lane': str(entry.get('new_lane', '')),
+                'old_phase': str(entry.get('old_phase', '')),
+                'new_phase': str(entry.get('new_phase', '')),
+                'old_gate': str(entry.get('old_gate', '')),
+                'new_gate': str(entry.get('new_gate', '')),
                 'actor': str(entry.get('actor', '')),
                 'source': str(entry.get('source', '')),
                 'endpoint': str(entry.get('endpoint', '')),
@@ -278,6 +342,82 @@ def update_task_status_file(file_path: Path, board_status: str) -> tuple[dict, s
     return task, str(old_board_status or ''), timestamp
 
 
+def update_task_transition_file(
+    file_path: Path, transition: str
+) -> tuple[dict, dict, dict, str]:
+    if transition not in ALLOWED_TRANSITIONS:
+        raise HTTPException(status_code=400, detail='transition is not allowed.')
+
+    text = file_path.read_text(encoding='utf-8')
+    match = re.match(r'^(---\r?\n)(?P<frontmatter>.*?)(\r?\n---\r?\n)(?P<body>.*)$', text, re.DOTALL)
+    if not match:
+        raise HTTPException(status_code=400, detail='Task file is missing YAML frontmatter.')
+
+    old = parse_frontmatter(text)
+    current_attempt = int(old.get('current_attempt') or 0)
+    max_attempts = int(old.get('max_attempts') or 0)
+    if current_attempt > max_attempts:
+        raise HTTPException(status_code=400, detail='current_attempt exceeds max_attempts.')
+
+    if transition == 'pick-up' and old.get('board_status') != 'planned':
+        raise HTTPException(status_code=400, detail='pick-up is only allowed from planned.')
+
+    if transition == 'mark-done':
+        if old.get('blocked') is True:
+            raise HTTPException(status_code=400, detail='mark-done is not allowed while blocked.')
+        if old.get('current_lane') not in {'reporter', 'manager'} and old.get('board_status') != 'in-review':
+            raise HTTPException(
+                status_code=400,
+                detail='mark-done requires reporter/manager lane or in-review status.',
+            )
+        updates = dict(TRANSITION_UPDATES[transition])
+    elif transition == 'send-back-for-rework':
+        new_attempt = current_attempt + 1
+        blocked = old.get('blocked') is True
+        if new_attempt > max_attempts:
+            new_attempt = max_attempts
+            blocked = True
+        updates = {
+            'board_status': 'in-progress',
+            'current_lane': 'cody',
+            'current_phase': 'rework',
+            'current_gate': 'build-complete',
+            'rework_needed': True,
+            'current_attempt': new_attempt,
+            'blocked': blocked,
+        }
+    else:
+        updates = dict(TRANSITION_UPDATES[transition])
+
+    timestamp = now_iso()
+    updates['last_updated'] = timestamp
+    frontmatter = match.group('frontmatter')
+    for field, value in updates.items():
+        if isinstance(value, bool):
+            raw_value = 'true' if value else 'false'
+        else:
+            raw_value = str(value)
+        frontmatter = replace_frontmatter_field(frontmatter, field, raw_value)
+
+    updated_text = f"{match.group(1)}{frontmatter}{match.group(3)}{match.group('body')}"
+
+    try:
+        file_path.write_text(updated_text, encoding='utf-8')
+    except OSError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail='Task file is not writable. In local dev, mount gtm-loop-workspace/tasks as writable.',
+        ) from exc
+
+    task = read_task(file_path)
+    for field, value in updates.items():
+        if task.get(field) != value:
+            raise HTTPException(status_code=500, detail='Task transition failed validation.')
+    if int(task.get('current_attempt') or 0) > int(task.get('max_attempts') or 0):
+        raise HTTPException(status_code=500, detail='Task attempt validation failed.')
+    return task, old, updates, timestamp
+
+
 @router.get('/tasks')
 async def get_gtm_loop_tasks(user=Depends(get_verified_user)):
     task_files = sorted(TASKS_DIR.glob('GTM-*.md')) if TASKS_DIR.exists() else []
@@ -315,7 +455,7 @@ async def update_gtm_loop_task_status(
 ):
     file_path = task_file_for_id(task_id)
     task, old_board_status, timestamp = update_task_status_file(file_path, payload.board_status)
-    audit_warning = append_status_audit_entry(
+    audit_warning = append_task_audit_entry(
         {
             'timestamp': timestamp,
             'task_id': task_id,
@@ -324,6 +464,39 @@ async def update_gtm_loop_task_status(
             'actor': actor_from_user(user),
             'source': '/gtm-loop/board',
             'endpoint': 'PATCH /api/gtm-loop/tasks/{task_id}/status',
+            'success': True,
+        }
+    )
+    task['audit_logged'] = audit_warning is None
+    if audit_warning:
+        task['audit_warning'] = audit_warning
+    return task
+
+
+@router.patch('/tasks/{task_id}/transition')
+async def transition_gtm_loop_task(
+    task_id: str,
+    payload: TaskTransitionUpdate,
+    user=Depends(get_verified_user),
+):
+    file_path = task_file_for_id(task_id)
+    task, old, updates, timestamp = update_task_transition_file(file_path, payload.transition)
+    audit_warning = append_task_audit_entry(
+        {
+            'timestamp': timestamp,
+            'task_id': task_id,
+            'transition': payload.transition,
+            'old_board_status': str(old.get('board_status') or ''),
+            'new_board_status': str(updates.get('board_status') or old.get('board_status') or ''),
+            'old_lane': str(old.get('current_lane') or ''),
+            'new_lane': str(updates.get('current_lane') or old.get('current_lane') or ''),
+            'old_phase': str(old.get('current_phase') or ''),
+            'new_phase': str(updates.get('current_phase') or old.get('current_phase') or ''),
+            'old_gate': str(old.get('current_gate') or ''),
+            'new_gate': str(updates.get('current_gate') or old.get('current_gate') or ''),
+            'actor': actor_from_user(user),
+            'source': '/gtm-loop/board',
+            'endpoint': 'PATCH /api/gtm-loop/tasks/{task_id}/transition',
             'success': True,
         }
     )
