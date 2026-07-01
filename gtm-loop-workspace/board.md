@@ -7,20 +7,6 @@ Transition rules: `orchestrator/transition-rules.md`
 
 ## Planned
 
-- [GTM-001](tasks/GTM-001.md) - Onboard first real client
-  - Client: TBD
-  - Lane: Brody
-  - Status: Planned
-  - Blocked: yes
-  - Next action: Manager provides client name and initial automation objective.
-
-- [GTM-003](tasks/GTM-003.md) - Confirm tool permissions
-  - Client: Global
-  - Lane: Brody
-  - Status: Planned
-  - Blocked: yes
-  - Next action: Confirm which integration surfaces are read-only, draft-only, approval-gated, deferred, or disabled.
-
 - [GTM-004](tasks/GTM-004.md) - Identify first automation candidate
   - Client: TBD
   - Lane: Brody
@@ -51,11 +37,21 @@ Transition rules: `orchestrator/transition-rules.md`
 
 ## In Progress
 
-_No active tasks._
+- [GTM-003](tasks/GTM-003.md) - Confirm tool permissions
+  - Client: Global
+  - Lane: Brody
+  - Status: In Progress
+  - Blocked: yes
+  - Next action: Run Brody investigation / requirements lane.
 
 ## Smoke Test
 
-_No active tasks._
+- [GTM-001](tasks/GTM-001.md) - Onboard first real client
+  - Client: TBD
+  - Lane: Brody
+  - Status: Smoke Test
+  - Blocked: yes
+  - Next action: Run Brody investigation / requirements lane.
 
 ## In Review
 

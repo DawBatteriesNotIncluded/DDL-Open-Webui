@@ -122,6 +122,84 @@ export type GtmLoopTaskAuditResponse = {
 	entries: GtmLoopTaskAuditEntry[];
 };
 
+export type GtmLoopApprovalType =
+	| 'n8n_workflow_create_update'
+	| 'n8n_workflow_activation'
+	| 'hubspot_write'
+	| 'gong_write'
+	| 'airops_write'
+	| 'external_webhook_exposure'
+	| 'email_send'
+	| 'credential_change'
+	| 'dependency_install'
+	| 'destructive_command'
+	| 'production_data_use'
+	| 'client_visible_deliverable'
+	| 'scheduled_loop';
+
+export type GtmLoopApprovalStatus =
+	| 'requested'
+	| 'approved'
+	| 'rejected'
+	| 'deferred'
+	| 'cancelled';
+
+export type GtmLoopApprovalRisk = 'low' | 'medium' | 'high' | 'critical';
+
+export type GtmLoopApproval = {
+	approval_id: string;
+	task_id: string;
+	type: GtmLoopApprovalType;
+	title: string;
+	requested_action: string;
+	system: string;
+	risk: GtmLoopApprovalRisk;
+	status: GtmLoopApprovalStatus;
+	requested_by: string;
+	decided_by: string;
+	created_at: string;
+	updated_at: string;
+	evidence_links: string[];
+	artifact_links: string[];
+	rollback_plan: string;
+	notes: string;
+};
+
+export type GtmLoopApprovalCounts = {
+	total: number;
+	requested: number;
+	approved: number;
+	rejected: number;
+	deferred: number;
+	critical_high_requested: number;
+};
+
+export type GtmLoopApprovalsResponse = {
+	approvals: GtmLoopApproval[];
+	counts: GtmLoopApprovalCounts;
+	count: number;
+	task_id?: string;
+};
+
+export type GtmLoopApprovalCreate = {
+	type: GtmLoopApprovalType;
+	title: string;
+	requested_action: string;
+	system: string;
+	risk: GtmLoopApprovalRisk;
+	evidence_links?: string[];
+	artifact_links?: string[];
+	rollback_plan?: string;
+	notes?: string;
+};
+
+export type GtmLoopApprovalResponse = {
+	approval: GtmLoopApproval;
+	task: GtmLoopTask;
+	audit_logged?: boolean;
+	audit_warning?: string;
+};
+
 export const getGtmLoopTasks = async (token: string = ''): Promise<GtmLoopTasksResponse> => {
 	const res = await fetch(`${WEBUI_BASE_URL}/api/gtm-loop/tasks`, {
 		method: 'GET',
@@ -134,6 +212,128 @@ export const getGtmLoopTasks = async (token: string = ''): Promise<GtmLoopTasksR
 
 	if (!res.ok) {
 		let detail = res.statusText || 'Unable to load GTM Loop tasks.';
+		try {
+			const body = await res.json();
+			detail = body.detail ?? detail;
+		} catch {
+			// Keep the status text fallback.
+		}
+
+		throw { status: res.status, detail } satisfies GtmLoopApiError;
+	}
+
+	return res.json();
+};
+
+export const getGtmLoopApprovals = async (
+	token: string = '',
+	filters: Record<string, string> = {}
+): Promise<GtmLoopApprovalsResponse> => {
+	const params = new URLSearchParams();
+	for (const [key, value] of Object.entries(filters)) {
+		if (value) params.set(key, value);
+	}
+	const query = params.toString();
+	const res = await fetch(`${WEBUI_BASE_URL}/api/gtm-loop/approvals${query ? `?${query}` : ''}`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		}
+	});
+
+	if (!res.ok) {
+		let detail = res.statusText || 'Unable to load GTM approvals.';
+		try {
+			const body = await res.json();
+			detail = body.detail ?? detail;
+		} catch {
+			// Keep the status text fallback.
+		}
+
+		throw { status: res.status, detail } satisfies GtmLoopApiError;
+	}
+
+	return res.json();
+};
+
+export const getGtmLoopTaskApprovals = async (
+	token: string,
+	taskId: string
+): Promise<GtmLoopApprovalsResponse> => {
+	const res = await fetch(`${WEBUI_BASE_URL}/api/gtm-loop/tasks/${taskId}/approvals`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		}
+	});
+
+	if (!res.ok) {
+		let detail = res.statusText || 'Unable to load GTM task approvals.';
+		try {
+			const body = await res.json();
+			detail = body.detail ?? detail;
+		} catch {
+			// Keep the status text fallback.
+		}
+
+		throw { status: res.status, detail } satisfies GtmLoopApiError;
+	}
+
+	return res.json();
+};
+
+export const createGtmLoopTaskApproval = async (
+	token: string,
+	taskId: string,
+	approval: GtmLoopApprovalCreate
+): Promise<GtmLoopApprovalResponse> => {
+	const res = await fetch(`${WEBUI_BASE_URL}/api/gtm-loop/tasks/${taskId}/approvals`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		},
+		body: JSON.stringify(approval)
+	});
+
+	if (!res.ok) {
+		let detail = res.statusText || 'Unable to create GTM approval.';
+		try {
+			const body = await res.json();
+			detail = body.detail ?? detail;
+		} catch {
+			// Keep the status text fallback.
+		}
+
+		throw { status: res.status, detail } satisfies GtmLoopApiError;
+	}
+
+	return res.json();
+};
+
+export const decideGtmLoopApproval = async (
+	token: string,
+	approvalId: string,
+	status: Exclude<GtmLoopApprovalStatus, 'requested'>,
+	notes: string = ''
+): Promise<GtmLoopApprovalResponse> => {
+	const res = await fetch(`${WEBUI_BASE_URL}/api/gtm-loop/approvals/${approvalId}/decision`, {
+		method: 'PATCH',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		},
+		body: JSON.stringify({ status, notes })
+	});
+
+	if (!res.ok) {
+		let detail = res.statusText || 'Unable to update GTM approval.';
 		try {
 			const body = await res.json();
 			detail = body.detail ?? detail;

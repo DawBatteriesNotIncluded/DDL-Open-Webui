@@ -56,6 +56,29 @@ Reply with explicit approval for this exact action.
 
 If the approval scope is ambiguous, do not act. Prepare the approval request instead.
 
+## Local Approval Queue
+
+Approval records live under:
+
+```text
+gtm-loop-workspace/tasks/_approvals/APP-####.json
+```
+
+The queue is local and records manager intent only. Creating or approving a record does not execute the action. Future executor code must check for a matching approved approval record before any n8n MCP call, CRM write, external send, credential change, destructive command, production data use, or scheduled loop activation.
+
+New approval records always start as `requested`. Approval decisions may move `requested` to `approved`, `rejected`, `deferred`, or `cancelled`, and may move `deferred` to `approved`, `rejected`, or `cancelled`. `approved`, `rejected`, and `cancelled` are terminal states; create a new approval record to revisit a terminal decision.
+
+Task frontmatter keeps only a summary:
+
+- `approval_required: true` when any approval is `requested` or `deferred`.
+- `approval_status: requested` when any requested approval exists.
+- `approval_status: deferred` when no requested approval exists but at least one deferred approval exists.
+- `approval_status: rejected` when the latest relevant decision is rejected and no requested/deferred approval exists.
+- `approval_status: approved` when all active approvals are approved.
+- `approval_status: not_required` when no approval is active.
+
+Approval events are audited in `gtm-loop-workspace/tasks/_audit/approval-events.jsonl`. Do not log secrets, auth headers, tokens, cookies, raw customer data, production payloads, or task bodies.
+
 ## Do Not Automate Yet
 
 These stay manual and approval-gated for v1:

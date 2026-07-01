@@ -67,7 +67,7 @@ Existing folders such as `agents/`, `build-system/`, `evals/`, `knowledge/`, `lo
 
 Detailed loop state stays inside task files. `Blocked`, `Approval Required`, and `Rework Needed` are task flags, not board columns.
 
-`/gtm-loop` is the Open WebUI cockpit dashboard. `/gtm-loop/board` is the visual Kanban board over the local task files. It has narrow local write paths for manager status moves, status-only drag/drop, orchestrator swimlane/gate transitions, and deterministic lane artifact creation. Full card editing and external actions remain blocked.
+`/gtm-loop` is the Open WebUI cockpit dashboard. `/gtm-loop/board` is the visual Kanban board over the local task files. It has narrow local write paths for manager status moves, status-only drag/drop, orchestrator swimlane/gate transitions, deterministic lane artifact creation, and local approval records. Full card editing and external actions remain blocked.
 
 ## Task Validation
 
@@ -88,7 +88,7 @@ Future frontend board work should read only from valid task files. Task validati
 | `/gtm-loop` | Cockpit dashboard with task counts, safety posture, starter prompt, and links. |
 | `/gtm-loop/board` | Kanban board grouped by `board_status` from `tasks/*.md`, with client-side search, filters, status moves, swimlane/gate transitions, lane artifact creation, and latest task audit in card details. |
 
-The board loads task metadata through `GET /api/gtm-loop/tasks`. Manager status moves and drag/drop use `PATCH /api/gtm-loop/tasks/{task_id}/status` and may change only `board_status` and `last_updated` in YAML frontmatter. Drag/drop is status-only; it does not change Ricky/Brody/Archy/Cody lane, phase, or gate state. Moving to Done through the status endpoint is guarded: the task must be unblocked, not need rework, have required approval approved, and already be in reporter/manager review state. Orchestrator progression uses `PATCH /api/gtm-loop/tasks/{task_id}/transition` and may change only the required safe lane/gate fields plus `last_updated`. Lane artifacts use `POST /api/gtm-loop/tasks/{task_id}/artifacts/{lane}` and may create deterministic Markdown starters only under `artifacts/<task_id>/`, then update `artifact_links` plus `last_updated`. Successful status and transition moves append a local JSONL audit entry to `tasks/_audit/status-changes.jsonl`; artifact creation appends to `tasks/_audit/artifact-events.jsonl`. Card details read the latest task changes through `GET /api/gtm-loop/tasks/{task_id}/audit`. It does not edit title, body, manager request, evidence, credentials, or external system fields. It does not call external APIs or connect to n8n. Search and filters run client-side in the browser over the loaded task list.
+The board loads task metadata through `GET /api/gtm-loop/tasks`. Manager status moves and drag/drop use `PATCH /api/gtm-loop/tasks/{task_id}/status` and may change only `board_status` and `last_updated` in YAML frontmatter. Drag/drop is status-only; it does not change Ricky/Brody/Archy/Cody lane, phase, or gate state. Moving to Done through the status endpoint is guarded: the task must be unblocked, not need rework, have required approval approved, have no requested/deferred approval records, and already be in reporter/manager review state. Orchestrator progression uses `PATCH /api/gtm-loop/tasks/{task_id}/transition` and may change only the required safe lane/gate fields plus `last_updated`. Lane artifacts use `POST /api/gtm-loop/tasks/{task_id}/artifacts/{lane}` and may create deterministic Markdown starters only under `artifacts/<task_id>/`, then update `artifact_links` plus `last_updated`. Local approval records use `GET /api/gtm-loop/approvals`, `GET/POST /api/gtm-loop/tasks/{task_id}/approvals`, and `PATCH /api/gtm-loop/approvals/{approval_id}/decision`. Approval JSON files live under `tasks/_approvals/`; task frontmatter stores only `approval_required`, `approval_status`, and `last_updated` as a summary. Successful status and transition moves append a local JSONL audit entry to `tasks/_audit/status-changes.jsonl`; artifact creation appends to `tasks/_audit/artifact-events.jsonl`; approval requests and decisions append to `tasks/_audit/approval-events.jsonl`. Card details read the latest task changes through `GET /api/gtm-loop/tasks/{task_id}/audit`. It does not edit title, body, manager request, evidence, credentials, or external system fields. It does not call external APIs or connect to n8n. Search and filters run client-side in the browser over the loaded task list.
 
 n8n MCP is documented as an available local draft executor surface, not an active app integration. Use `integrations/n8n-mcp.md`, `executors/n8n-draft-executor.md`, and `artifacts/_templates/build/n8n-workflow-draft.md` to prepare local workflow drafts with fake payloads. Open WebUI does not call n8n MCP from the GTM Loop UI in this pass.
 
@@ -111,7 +111,9 @@ Manual board smoke test:
 13. Confirm task `artifact_links` includes the created Markdown files.
 14. Restore the test task to its original state if needed.
 15. Open the task card details and confirm latest task changes display.
-16. Run `node scripts\validate-gtm-tasks.js`.
+16. Create a local approval request, then approve/defer/reject/cancel it from card details.
+17. Confirm `tasks/_approvals/APP-####.json` and `tasks/_audit/approval-events.jsonl` update.
+18. Run `node scripts\validate-gtm-tasks.js`.
 
 ## Evidence Labels
 
@@ -175,10 +177,16 @@ Use `UPDATE-OWNERSHIP.md` when deciding where to write. Short version:
 
 ## Do Not Automate Yet
 
-No external API writes, workflow activation, email sending, credential changes, production retries, or destructive operations from this workbench without explicit approval for the exact action. The only local write paths are task frontmatter status/lane/gate transitions, status-only drag/drop, deterministic local Markdown artifact creation, and local audit entries.
+No external API writes, workflow activation, email sending, credential changes, production retries, or destructive operations from this workbench without explicit approval for the exact action. The only local write paths are task frontmatter status/lane/gate transitions, status-only drag/drop, deterministic local Markdown artifact creation, local approval records, and local audit entries.
 
 ## Status Audit
 
 `tasks/_audit/status-changes.jsonl` records local status and orchestrator transition changes only. Each line includes timestamp, task id, old/new status, old/new lane/phase/gate when present, actor when available, source, endpoint, and success. `GET /api/gtm-loop/tasks/{task_id}/audit` returns the latest matching entries for one task only. It does not store or return task bodies, secrets, credentials, cookies, auth headers, or external system payloads. Use `runs/index.md` for meaningful workbench runs; the JSONL file is only a lightweight transition audit.
 
 `tasks/_audit/artifact-events.jsonl` records local artifact creation events only. Each line includes timestamp, task id, lane, files created, files skipped, actor when available, source, endpoint, and success. Artifact files are deterministic Markdown starters under `artifacts/<task_id>/`; future agents fill them with evidence later.
+
+## Approval Queue
+
+`tasks/_approvals/APP-####.json` stores one local approval record per risky future action. New approval records always start as `requested`; `approved`, `rejected`, `deferred`, and `cancelled` outcomes must be made through the decision endpoint. `approved`, `rejected`, and `cancelled` are terminal; revisit rejected/cancelled work by creating a new approval record. Approval does not execute the action; it only records manager intent and may unlock a future exact executor action after that executor checks for a matching approved record.
+
+`tasks/_audit/approval-events.jsonl` records approval creation and decisions only. It includes timestamp, approval id, task id, event, old/new status, actor, source, endpoint, and success. It must not include secrets, auth headers, raw customer data, tokens, cookies, production payloads, or task bodies.

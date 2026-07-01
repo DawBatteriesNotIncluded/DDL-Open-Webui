@@ -10,6 +10,7 @@ This file owns tool access status, permission level, safe reads, blocked actions
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Open WebUI Knowledge | Agent context and retrieval | Read | Retrieve workspace docs | Upload sensitive client data | User | Ready | `openwebui-setup.md`, `imports/openwebui-workspace-manifest.json` |
 | Open WebUI GTM Loop UI | Daily in-app cockpit surface | Read | View status, links, starter prompt, and safety gates | Execute external actions or mutate client systems | User | Ready | `src/routes/(app)/gtm-loop/+page.svelte` |
+| GTM Approval Queue | Local manager approval intent records | Write-approved local | Request, approve, reject, defer, or cancel local approval records; update task approval summary; audit decisions | Execute the approved action, call tools, mutate external systems, store secrets or raw customer data | User | Ready | `tasks/_approvals/`, `tasks/_audit/approval-events.jsonl`, `governance/approval-gates.md` |
 | Codex | Repo/file edits and validation | Read/write in repo | Edit workspace docs, inspect repo, run safe checks | External writes, destructive commands, secret handling | User | Available | Current session |
 | codebase-memory-mcp | Repo code discovery and impact analysis | Read | Search graph, trace paths, inspect snippets, query indexed architecture | Mutate source, infer production truth from code alone | User | Available | `AGENTS.md` |
 | Board MCP | Future structured board read/update adapter | None | None for v1; use `board.md` directly | Updating cards outside `board.md` contract | `TBD` | Deferred | `orchestrator/agent-routing.md` |
@@ -33,7 +34,7 @@ This file owns tool access status, permission level, safe reads, blocked actions
 
 ## Safe Default
 
-All unconfirmed tools are treated as `None` or read-only planning surfaces. Agents may draft requests and payloads, but must not execute writes, activation, credential changes, or destructive actions.
+All unconfirmed tools are treated as `None` or read-only planning surfaces. Agents may draft requests and payloads, but must not execute writes, activation, credential changes, or destructive actions. The approval queue records manager intent only; future executor tools must still verify a matching approved approval before any live call.
 
 ## Tool Card Template
 

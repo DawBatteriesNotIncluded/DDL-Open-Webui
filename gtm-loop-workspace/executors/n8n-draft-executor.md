@@ -21,7 +21,7 @@ Before drafting n8n work, link these artifacts from the active task:
 - n8n workflow draft spec.
 - n8n workflow JSON draft if the shape is known and can stay local.
 - fake payload validation notes.
-- approval request before activation, live webhook use, credential use, or production writes.
+- local approval request before activation, live webhook use, credential use, or production writes.
 
 ## Draft Workflow File
 
@@ -57,10 +57,11 @@ gtm-loop-workspace/artifacts/<task_id>/build/
 6. Record fake payload validation notes.
 7. Prepare an approval request for any live n8n action.
 
+The approval request should be stored as a local approval record under `tasks/_approvals/APP-####.json`. Approval does not execute the action. Future executor code must check for a matching approved approval before any n8n MCP create/update, activation, credential use, live webhook, retry, or scheduled loop call.
+
 ## Completion Criteria
 
 - Draft has trigger, nodes, transformations, fake input, fake output, validation plan, and rollback/disable plan.
 - Draft explicitly says external writes are blocked until approval.
 - No secrets or real client payloads are stored.
 - Task `artifact_links` points to the draft artifact when created.
-

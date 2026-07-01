@@ -30,7 +30,7 @@ The Open WebUI routes are:
 - `/gtm-loop`: cockpit dashboard.
 - `/gtm-loop/board`: read-only Kanban board.
 
-The board reads these task files through `GET /api/gtm-loop/tasks`. Manager status moves and drag/drop use `PATCH /api/gtm-loop/tasks/{task_id}/status` and may update only `board_status` and `last_updated` in YAML frontmatter. Drag/drop does not change `current_lane`, `current_phase`, or `current_gate`; use explicit orchestrator transition buttons for those fields. Moving to `done` through the status endpoint is blocked unless the task is unblocked, does not need rework, has any required approval approved, and is already in reporter/manager review state. Orchestrator swimlane/gate transitions use `PATCH /api/gtm-loop/tasks/{task_id}/transition` and may update only the safe transition fields needed for the selected lane/gate. Lane artifacts use `POST /api/gtm-loop/tasks/{task_id}/artifacts/{lane}` and may create deterministic Markdown starters only under `../artifacts/<task_id>/`, then update `artifact_links` and `last_updated`. Successful moves append a JSONL audit entry to `_audit/status-changes.jsonl`; artifact creation appends to `_audit/artifact-events.jsonl`. Card details read latest task changes through `GET /api/gtm-loop/tasks/{task_id}/audit`. Search and filters on `/gtm-loop/board` are client-side only and do not change task files, `board.md`, or the API response.
+The board reads these task files through `GET /api/gtm-loop/tasks`. Manager status moves and drag/drop use `PATCH /api/gtm-loop/tasks/{task_id}/status` and may update only `board_status` and `last_updated` in YAML frontmatter. Drag/drop does not change `current_lane`, `current_phase`, or `current_gate`; use explicit orchestrator transition buttons for those fields. Moving to `done` through the status endpoint is blocked unless the task is unblocked, does not need rework, has any required approval approved, has no requested/deferred approval records, and is already in reporter/manager review state. Orchestrator swimlane/gate transitions use `PATCH /api/gtm-loop/tasks/{task_id}/transition` and may update only the safe transition fields needed for the selected lane/gate. Lane artifacts use `POST /api/gtm-loop/tasks/{task_id}/artifacts/{lane}` and may create deterministic Markdown starters only under `../artifacts/<task_id>/`, then update `artifact_links` and `last_updated`. Approval records use `GET/POST /api/gtm-loop/tasks/{task_id}/approvals`, `GET /api/gtm-loop/approvals`, and `PATCH /api/gtm-loop/approvals/{approval_id}/decision`; they write local JSON files under `_approvals/` and update only the task approval summary fields. Successful moves append a JSONL audit entry to `_audit/status-changes.jsonl`; artifact creation appends to `_audit/artifact-events.jsonl`; approval requests and decisions append to `_audit/approval-events.jsonl`. Card details read latest task changes through `GET /api/gtm-loop/tasks/{task_id}/audit`. Search and filters on `/gtm-loop/board` are client-side only and do not change task files, `board.md`, or the API response.
 
 In local Docker development, `docker-compose.override.yaml` bind-mounts this workspace into the container at `/app/gtm-loop-workspace` as read-only, then overlays only `tasks/` and `artifacts/` as writable. Production mode may still use the image-baked copy of the workspace.
 
@@ -55,6 +55,14 @@ It does not log task bodies, secrets, credentials, cookies, auth headers, or ext
 
 `_audit/artifact-events.jsonl` records local artifact creation events with timestamp, task id, lane, files created, files skipped, actor, source, endpoint, and success. It does not log artifact bodies or external payloads.
 
+## Approval Queue
+
+`_approvals/APP-####.json` stores one local approval record per risky future action. Approval records are canonical for approval detail; task frontmatter keeps only the summary fields `approval_required`, `approval_status`, and `last_updated`.
+
+Allowed approval statuses are `requested`, `approved`, `rejected`, `deferred`, and `cancelled`. New approvals always start as `requested`; future approved/rejected/deferred/cancelled states must come from the decision endpoint. Requested and deferred approvals keep execution blocked. `approved`, `rejected`, and `cancelled` are terminal states; create a new approval record to revisit rejected or cancelled work. Approved records only unlock future exact actions for executor code that checks the matching approval; they do not run tools by themselves.
+
+`_audit/approval-events.jsonl` records approval creation and decisions with timestamp, approval id, task id, event, old/new status, actor, source, endpoint, and success. It must not log secrets, cookies, auth headers, tokens, raw customer data, production payloads, or task bodies.
+
 ## Browser Smoke Test
 
 1. Log in to Open WebUI.
@@ -71,9 +79,11 @@ It does not log task bodies, secrets, credentials, cookies, auth headers, or ext
 12. Confirm audit entries were appended to `_audit/status-changes.jsonl`.
 13. Restore the test task to its original state if needed.
 14. Open card details and confirm latest task changes display.
-15. Run `node scripts\validate-gtm-tasks.js`.
+15. Create a local approval request, then approve/defer/reject/cancel it from card details.
+16. Confirm `_approvals/APP-####.json` and `_audit/approval-events.jsonl` update.
+17. Run `node scripts\validate-gtm-tasks.js`.
 
-The board has only narrow status/transition writes, status-only drag/drop, deterministic artifact starter creation, and task-local audit appends. Task title, body, manager request, evidence, credentials, and external system fields still happen in Markdown files, not in the UI.
+The board has only narrow status/transition writes, status-only drag/drop, deterministic artifact starter creation, local approval records, and task-local audit appends. Task title, body, manager request, evidence, credentials, and external system fields still happen in Markdown files, not in the UI.
 
 ## Board Mapping
 

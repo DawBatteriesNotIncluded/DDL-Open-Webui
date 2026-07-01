@@ -6,17 +6,19 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from open_webui.utils.auth import get_verified_user
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 router = APIRouter()
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 TASKS_DIR = REPO_ROOT / 'gtm-loop-workspace' / 'tasks'
 ARTIFACTS_DIR = REPO_ROOT / 'gtm-loop-workspace' / 'artifacts'
+APPROVALS_DIR = TASKS_DIR / '_approvals'
 STATUS_AUDIT_LOG = TASKS_DIR / '_audit' / 'status-changes.jsonl'
 ARTIFACT_AUDIT_LOG = TASKS_DIR / '_audit' / 'artifact-events.jsonl'
+APPROVAL_AUDIT_LOG = TASKS_DIR / '_audit' / 'approval-events.jsonl'
 SECRET_RE = re.compile(
     r'api_key|token|secret|password|bearer|private_key|client_secret|refresh_token|access_token',
     re.IGNORECASE,
@@ -77,6 +79,29 @@ BOARD_COLUMNS = {
 }
 ALLOWED_BOARD_STATUSES = set(BOARD_COLUMNS) | {'cancelled'}
 TASK_ID_RE = re.compile(r'^GTM-\d+$')
+APPROVAL_ID_RE = re.compile(r'^APP-\d{4}$')
+ALLOWED_APPROVAL_TYPES = {
+    'n8n_workflow_create_update',
+    'n8n_workflow_activation',
+    'hubspot_write',
+    'gong_write',
+    'airops_write',
+    'external_webhook_exposure',
+    'email_send',
+    'credential_change',
+    'dependency_install',
+    'destructive_command',
+    'production_data_use',
+    'client_visible_deliverable',
+    'scheduled_loop',
+}
+ALLOWED_APPROVAL_STATUSES = {'requested', 'approved', 'rejected', 'deferred', 'cancelled'}
+DECISION_APPROVAL_STATUSES = {'approved', 'rejected', 'deferred', 'cancelled'}
+ALLOWED_APPROVAL_DECISION_TRANSITIONS = {
+    'requested': {'approved', 'rejected', 'deferred', 'cancelled'},
+    'deferred': {'approved', 'rejected', 'cancelled'},
+}
+ALLOWED_APPROVAL_RISKS = {'low', 'medium', 'high', 'critical'}
 TRANSITION_UPDATES = {
     'pick-up': {
         'board_status': 'in-progress',
@@ -158,6 +183,25 @@ class TaskArtifactCreate(BaseModel):
     overwrite: bool = False
 
 
+class TaskApprovalCreate(BaseModel):
+    type: str
+    title: str
+    requested_action: str
+    system: str = ''
+    risk: str = 'medium'
+    status: str = 'requested'
+    requested_by: str = ''
+    evidence_links: list[str] = Field(default_factory=list)
+    artifact_links: list[str] = Field(default_factory=list)
+    rollback_plan: str = ''
+    notes: str = ''
+
+
+class ApprovalDecision(BaseModel):
+    status: str
+    notes: str = ''
+
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
 
@@ -210,6 +254,12 @@ def sanitize(value):
         return '[redacted: credential-style value]' if SECRET_RE.search(value) else value
     if isinstance(value, list):
         return [sanitize(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: sanitize(item)
+            for key, item in value.items()
+            if not SECRET_RE.search(str(key))
+        }
     return value
 
 
@@ -304,6 +354,185 @@ def append_artifact_audit_entry(entry: dict) -> str | None:
     return append_audit_entry(ARTIFACT_AUDIT_LOG, entry)
 
 
+def append_approval_audit_entry(entry: dict) -> str | None:
+    return append_audit_entry(APPROVAL_AUDIT_LOG, entry)
+
+
+def assert_no_secret_values(value, label: str = 'approval') -> None:
+    if isinstance(value, str):
+        if SECRET_RE.search(value):
+            raise HTTPException(
+                status_code=400,
+                detail=f'{label} contains credential-style text and was not saved.',
+            )
+    elif isinstance(value, list):
+        for item in value:
+            assert_no_secret_values(item, label)
+    elif isinstance(value, dict):
+        for item in value.values():
+            assert_no_secret_values(item, label)
+
+
+def approval_file_for_id(approval_id: str) -> Path:
+    if not APPROVAL_ID_RE.fullmatch(approval_id):
+        raise HTTPException(status_code=400, detail='approval_id must match APP-####.')
+
+    root = APPROVALS_DIR.resolve()
+    target = (APPROVALS_DIR / f'{approval_id}.json').resolve()
+    if root != target.parent:
+        raise HTTPException(status_code=400, detail='Approval path is invalid.')
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail='Approval record not found.')
+    return target
+
+
+def read_approval_file(file_path: Path) -> dict:
+    try:
+        record = json.loads(file_path.read_text(encoding='utf-8'))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=500, detail='Approval record cannot be read.') from exc
+
+    return sanitize(record)
+
+
+def read_approval_records(
+    status: str | None = None,
+    task_id: str | None = None,
+    approval_type: str | None = None,
+    system: str | None = None,
+    risk: str | None = None,
+) -> list[dict]:
+    if status and status not in ALLOWED_APPROVAL_STATUSES:
+        raise HTTPException(status_code=400, detail='approval status filter is not allowed.')
+    if task_id:
+        task_file_for_id(task_id)
+    if approval_type and approval_type not in ALLOWED_APPROVAL_TYPES:
+        raise HTTPException(status_code=400, detail='approval type filter is not allowed.')
+    if risk and risk not in ALLOWED_APPROVAL_RISKS:
+        raise HTTPException(status_code=400, detail='approval risk filter is not allowed.')
+
+    if not APPROVALS_DIR.exists():
+        return []
+
+    records = []
+    for file_path in sorted(APPROVALS_DIR.glob('APP-*.json')):
+        record = read_approval_file(file_path)
+        if status and record.get('status') != status:
+            continue
+        if task_id and record.get('task_id') != task_id:
+            continue
+        if approval_type and record.get('type') != approval_type:
+            continue
+        if system and record.get('system') != system:
+            continue
+        if risk and record.get('risk') != risk:
+            continue
+        records.append(record)
+    return records
+
+
+def next_approval_id() -> str:
+    APPROVALS_DIR.mkdir(parents=True, exist_ok=True)
+    highest = 0
+    for file_path in APPROVALS_DIR.glob('APP-*.json'):
+        match = re.fullmatch(r'APP-(\d{4})\.json', file_path.name)
+        if match:
+            highest = max(highest, int(match.group(1)))
+    return f'APP-{highest + 1:04d}'
+
+
+def write_approval_record(record: dict, *, exclusive: bool = False) -> None:
+    approval_id = str(record.get('approval_id') or '')
+    if not APPROVAL_ID_RE.fullmatch(approval_id):
+        raise HTTPException(status_code=400, detail='approval_id must match APP-####.')
+
+    APPROVALS_DIR.mkdir(parents=True, exist_ok=True)
+    target = (APPROVALS_DIR / f'{approval_id}.json').resolve()
+    root = APPROVALS_DIR.resolve()
+    if root != target.parent:
+        raise HTTPException(status_code=400, detail='Approval path is invalid.')
+
+    try:
+        with target.open('x' if exclusive else 'w', encoding='utf-8') as file:
+            file.write(json.dumps(record, indent=2) + '\n')
+    except FileExistsError:
+        if exclusive:
+            raise
+        raise
+    except OSError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail='Approval path is not writable. In local dev, mount gtm-loop-workspace/tasks as writable.',
+        ) from exc
+
+
+def approval_summary_for_task(task_id: str) -> tuple[bool, str]:
+    approvals = read_approval_records(task_id=task_id)
+    if not approvals:
+        return False, 'not_required'
+
+    statuses = [str(approval.get('status') or '') for approval in approvals]
+    if 'requested' in statuses:
+        return True, 'requested'
+    if 'deferred' in statuses:
+        return True, 'deferred'
+
+    active = [approval for approval in approvals if approval.get('status') != 'cancelled']
+    if not active:
+        return False, 'not_required'
+
+    latest = sorted(
+        active,
+        key=lambda approval: (
+            str(approval.get('updated_at') or approval.get('created_at') or ''),
+            str(approval.get('approval_id') or ''),
+        ),
+    )[-1]
+    if latest.get('status') == 'rejected':
+        return False, 'rejected'
+    if all(approval.get('status') == 'approved' for approval in active):
+        return False, 'approved'
+    if any(approval.get('status') == 'rejected' for approval in active):
+        return False, 'rejected'
+    return False, 'not_required'
+
+
+def update_task_approval_summary(file_path: Path) -> dict:
+    text = file_path.read_text(encoding='utf-8')
+    match = re.match(r'^(---\r?\n)(?P<frontmatter>.*?)(\r?\n---\r?\n)(?P<body>.*)$', text, re.DOTALL)
+    if not match:
+        raise HTTPException(status_code=400, detail='Task file is missing YAML frontmatter.')
+
+    approval_required, approval_status = approval_summary_for_task(file_path.stem)
+    timestamp = now_iso()
+    frontmatter = replace_frontmatter_field(
+        match.group('frontmatter'), 'approval_required', 'true' if approval_required else 'false'
+    )
+    frontmatter = replace_frontmatter_field(frontmatter, 'approval_status', approval_status)
+    frontmatter = replace_frontmatter_field(frontmatter, 'last_updated', timestamp)
+    updated_text = f"{match.group(1)}{frontmatter}{match.group(3)}{match.group('body')}"
+
+    try:
+        file_path.write_text(updated_text, encoding='utf-8')
+    except OSError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail='Task file is not writable. In local dev, mount gtm-loop-workspace/tasks as writable.',
+        ) from exc
+
+    task = read_task(file_path)
+    if task.get('approval_required') != approval_required or task.get('approval_status') != approval_status:
+        raise HTTPException(status_code=500, detail='Task approval summary failed validation.')
+    return task
+
+
+def has_unresolved_approvals(task_id: str) -> bool:
+    return any(
+        approval.get('status') in {'requested', 'deferred'}
+        for approval in read_approval_records(task_id=task_id)
+    )
+
+
 def read_status_audit_entries(task_id: str, limit: int) -> list[dict]:
     if not STATUS_AUDIT_LOG.exists():
         return []
@@ -360,6 +589,8 @@ def update_task_status_file(file_path: Path, board_status: str) -> tuple[dict, s
             blockers.append('task needs rework')
         if frontmatter_data.get('approval_required') is True and frontmatter_data.get('approval_status') != 'approved':
             blockers.append('approval is required but approval_status is not approved')
+        if has_unresolved_approvals(file_path.stem):
+            blockers.append('task has requested or deferred approval records')
         done_ready = (
             old_board_status == 'in-review'
             or frontmatter_data.get('current_lane') in {'reporter', 'manager'}
@@ -416,6 +647,18 @@ def update_task_transition_file(
     if transition == 'mark-done':
         if old.get('blocked') is True:
             raise HTTPException(status_code=400, detail='mark-done is not allowed while blocked.')
+        if old.get('rework_needed') is True:
+            raise HTTPException(status_code=400, detail='mark-done is not allowed while rework is needed.')
+        if old.get('approval_required') is True and old.get('approval_status') != 'approved':
+            raise HTTPException(
+                status_code=400,
+                detail='mark-done requires approval_status approved when approval is required.',
+            )
+        if has_unresolved_approvals(file_path.stem):
+            raise HTTPException(
+                status_code=400,
+                detail='mark-done is not allowed while approval records are requested or deferred.',
+            )
         if old.get('current_lane') not in {'reporter', 'manager'} and old.get('board_status') != 'in-review':
             raise HTTPException(
                 status_code=400,
@@ -612,6 +855,189 @@ def create_task_lane_artifacts(
 
     updated_task, update_timestamp = update_task_artifact_links(file_path, links)
     return updated_task, created, skipped, update_timestamp
+
+
+def validate_approval_payload(payload: TaskApprovalCreate) -> None:
+    if payload.type not in ALLOWED_APPROVAL_TYPES:
+        raise HTTPException(status_code=400, detail='approval type is not allowed.')
+    if payload.status != 'requested':
+        raise HTTPException(
+            status_code=400,
+            detail='approval creation always starts as requested; use the decision endpoint for outcomes.',
+        )
+    if payload.risk not in ALLOWED_APPROVAL_RISKS:
+        raise HTTPException(status_code=400, detail='approval risk is not allowed.')
+    if not payload.title.strip():
+        raise HTTPException(status_code=400, detail='approval title is required.')
+    if not payload.requested_action.strip():
+        raise HTTPException(status_code=400, detail='requested_action is required.')
+    assert_no_secret_values(payload.model_dump(), 'approval request')
+
+
+def approval_counts(approvals: list[dict]) -> dict:
+    return {
+        'total': len(approvals),
+        'requested': sum(1 for approval in approvals if approval.get('status') == 'requested'),
+        'approved': sum(1 for approval in approvals if approval.get('status') == 'approved'),
+        'rejected': sum(1 for approval in approvals if approval.get('status') == 'rejected'),
+        'deferred': sum(1 for approval in approvals if approval.get('status') == 'deferred'),
+        'critical_high_requested': sum(
+            1
+            for approval in approvals
+            if approval.get('status') == 'requested'
+            and approval.get('risk') in {'critical', 'high'}
+        ),
+    }
+
+
+@router.get('/approvals')
+async def get_gtm_loop_approvals(
+    status: str | None = None,
+    task_id: str | None = None,
+    approval_type: str | None = Query(default=None, alias='type'),
+    system: str | None = None,
+    risk: str | None = None,
+    user=Depends(get_verified_user),
+):
+    approvals = read_approval_records(
+        status=status,
+        task_id=task_id,
+        approval_type=approval_type,
+        system=system,
+        risk=risk,
+    )
+    return {'approvals': approvals, 'counts': approval_counts(approvals), 'count': len(approvals)}
+
+
+@router.get('/tasks/{task_id}/approvals')
+async def get_gtm_loop_task_approvals(
+    task_id: str,
+    user=Depends(get_verified_user),
+):
+    task_file_for_id(task_id)
+    approvals = read_approval_records(task_id=task_id)
+    return {
+        'task_id': task_id,
+        'approvals': approvals,
+        'counts': approval_counts(approvals),
+        'count': len(approvals),
+    }
+
+
+@router.post('/tasks/{task_id}/approvals')
+async def create_gtm_loop_task_approval(
+    task_id: str,
+    payload: TaskApprovalCreate,
+    user=Depends(get_verified_user),
+):
+    file_path = task_file_for_id(task_id)
+    validate_approval_payload(payload)
+
+    timestamp = now_iso()
+    actor = actor_from_user(user)
+    record = {
+        'approval_id': '',
+        'task_id': task_id,
+        'type': payload.type,
+        'title': payload.title.strip(),
+        'requested_action': payload.requested_action.strip(),
+        'system': payload.system.strip(),
+        'risk': payload.risk,
+        'status': 'requested',
+        'requested_by': payload.requested_by.strip() or actor,
+        'decided_by': '',
+        'created_at': timestamp,
+        'updated_at': timestamp,
+        'evidence_links': payload.evidence_links,
+        'artifact_links': payload.artifact_links,
+        'rollback_plan': payload.rollback_plan.strip(),
+        'notes': payload.notes.strip(),
+    }
+    for _ in range(100):
+        approval_id = next_approval_id()
+        record['approval_id'] = approval_id
+        try:
+            write_approval_record(record, exclusive=True)
+            break
+        except FileExistsError:
+            continue
+    else:
+        raise HTTPException(status_code=409, detail='Could not allocate a unique approval id.')
+
+    task = update_task_approval_summary(file_path)
+    audit_warning = append_approval_audit_entry(
+        {
+            'timestamp': timestamp,
+            'approval_id': approval_id,
+            'task_id': task_id,
+            'event': 'created',
+            'old_status': '',
+            'new_status': payload.status,
+            'actor': actor,
+            'source': '/gtm-loop/board',
+            'endpoint': 'POST /api/gtm-loop/tasks/{task_id}/approvals',
+            'success': True,
+        }
+    )
+    return {
+        'approval': record,
+        'task': task,
+        'audit_logged': audit_warning is None,
+        'audit_warning': audit_warning or '',
+    }
+
+
+@router.patch('/approvals/{approval_id}/decision')
+async def decide_gtm_loop_approval(
+    approval_id: str,
+    payload: ApprovalDecision,
+    user=Depends(get_verified_user),
+):
+    if payload.status not in DECISION_APPROVAL_STATUSES:
+        raise HTTPException(status_code=400, detail='approval decision status is not allowed.')
+    assert_no_secret_values(payload.model_dump(), 'approval decision')
+
+    file_path = approval_file_for_id(approval_id)
+    record = read_approval_file(file_path)
+    old_status = str(record.get('status') or '')
+    if payload.status not in ALLOWED_APPROVAL_DECISION_TRANSITIONS.get(old_status, set()):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f'approval transition {old_status or "unknown"} -> {payload.status} is not allowed; '
+                'create a new approval record to revisit terminal decisions.'
+            ),
+        )
+    timestamp = now_iso()
+    actor = actor_from_user(user)
+    record['status'] = payload.status
+    record['decided_by'] = actor
+    record['updated_at'] = timestamp
+    record['notes'] = payload.notes.strip()
+    write_approval_record(record)
+
+    task_id = str(record.get('task_id') or '')
+    task = update_task_approval_summary(task_file_for_id(task_id))
+    audit_warning = append_approval_audit_entry(
+        {
+            'timestamp': timestamp,
+            'approval_id': approval_id,
+            'task_id': task_id,
+            'event': payload.status,
+            'old_status': old_status,
+            'new_status': payload.status,
+            'actor': actor,
+            'source': '/gtm-loop/board',
+            'endpoint': 'PATCH /api/gtm-loop/approvals/{approval_id}/decision',
+            'success': True,
+        }
+    )
+    return {
+        'approval': record,
+        'task': task,
+        'audit_logged': audit_warning is None,
+        'audit_warning': audit_warning or '',
+    }
 
 
 @router.get('/tasks')

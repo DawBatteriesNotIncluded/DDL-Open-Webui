@@ -35,7 +35,7 @@ Use task frontmatter flags instead:
 
 Drag/drop on `/gtm-loop/board` is a status move only. It must call the same status endpoint, must not change `current_lane`, `current_phase`, or `current_gate`, and must not create artifacts or call external systems.
 
-Moving to `done` through the status endpoint is allowed only when the task is unblocked, does not need rework, has required approval approved, and is already in a reporter/manager review state: `board_status: in-review`, `current_lane: reporter`, `current_lane: manager`, `current_phase: report`, or `current_gate: manager-review`.
+Moving to `done` through the status endpoint is allowed only when the task is unblocked, does not need rework, has required approval approved, has no requested/deferred approval records, and is already in a reporter/manager review state: `board_status: in-review`, `current_lane: reporter`, `current_lane: manager`, `current_phase: report`, or `current_gate: manager-review`.
 
 `PATCH /api/gtm-loop/tasks/{task_id}/transition` is for orchestrator swimlane/gate progression. It may update only the safe frontmatter fields needed for the selected transition plus `last_updated`.
 
@@ -74,6 +74,21 @@ Allowed artifact lanes:
 
 Artifact creation is local-only, template-based, and audited in `tasks/_audit/artifact-events.jsonl`. It does not call LLMs, external systems, n8n MCP, or production APIs.
 
+## Approval Queue
+
+Approval records move risky future actions through request, approval, rejection, deferral, or cancellation. They do not execute the action.
+
+Approval endpoints:
+
+| Endpoint | Purpose | Writes |
+| --- | --- | --- |
+| `GET /api/gtm-loop/approvals` | List local approvals, with filters. | None |
+| `GET /api/gtm-loop/tasks/{task_id}/approvals` | List approvals for one task. | None |
+| `POST /api/gtm-loop/tasks/{task_id}/approvals` | Create one local approval request. | `tasks/_approvals/APP-####.json`, task approval summary, approval audit |
+| `PATCH /api/gtm-loop/approvals/{approval_id}/decision` | Approve, reject, defer, or cancel. | Approval JSON status/notes, task approval summary, approval audit |
+
+Task frontmatter fields `approval_required` and `approval_status` are summaries only. Approval JSON files under `tasks/_approvals/` are canonical for approval detail. Approval events are audited in `tasks/_audit/approval-events.jsonl`.
+
 ## Cody n8n Draft Executor
 
 When a task moves to Cody/build, n8n MCP may be used only as a draft executor surface after required requirements and architecture artifacts exist.
@@ -83,7 +98,7 @@ Allowed Cody/n8n outputs:
 - local workflow draft specs;
 - local draft workflow JSON;
 - fake payload validation notes;
-- approval requests for live n8n actions.
+- local approval requests for live n8n actions.
 
 Blocked without explicit approval:
 
@@ -93,6 +108,8 @@ Blocked without explicit approval:
 - HubSpot, Gong, AirOps, or custom API writes.
 
 Use `executors/n8n-draft-executor.md`, `integrations/n8n-mcp.md`, and `artifacts/_templates/build/n8n-workflow-draft.md`.
+
+Future n8n MCP calls must require a matching approved approval record for the exact requested action. Rejected, deferred, requested, or cancelled records do not unlock execution.
 
 ## Required Conditions
 

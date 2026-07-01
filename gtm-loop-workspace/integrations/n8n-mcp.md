@@ -20,7 +20,7 @@ This status proves local availability only. It does not grant permission to crea
 
 `n8n MCP` is `available-local / draft-only / approval-gated`.
 
-Use it as a Cody/build executor surface for planning and local draft artifacts only. Until the user explicitly approves a specific action, agents may prepare draft workflow specs, draft workflow JSON, fake payload tests, and approval requests.
+Use it as a Cody/build executor surface for planning and local draft artifacts only. Until the user explicitly approves a specific action, agents may prepare draft workflow specs, draft workflow JSON, fake payload tests, and local approval requests.
 
 ## Allowed Actions
 
@@ -45,7 +45,7 @@ Use it as a Cody/build executor surface for planning and local draft artifacts o
 
 ## Approval Gates
 
-Before any live n8n action, prepare an approval request that states:
+Before any live n8n action, prepare a local approval record under `tasks/_approvals/APP-####.json` that states:
 
 - workflow name or draft id;
 - environment;
@@ -57,6 +57,8 @@ Before any live n8n action, prepare an approval request that states:
 - rollback or disable plan.
 
 If any approval scope is ambiguous, do not act. Keep the work in draft artifacts.
+
+An approved approval record does not execute n8n work by itself. Future n8n MCP executor code must require a matching approved approval before create/update, activation, credential use, webhook exposure, production retry, or scheduled automation.
 
 ## Fake Payload Requirement
 
@@ -84,4 +86,3 @@ Do not paste real webhook bodies, CRM records, Gong transcript text, auth header
 - [ ] Approval boundary is written in the draft.
 - [ ] Rollback or disable plan exists.
 - [ ] Human approval request is prepared before any live n8n action.
-

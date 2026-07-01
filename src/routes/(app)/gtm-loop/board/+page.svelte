@@ -6,10 +6,18 @@
 	import SidebarIcon from '$lib/components/icons/Sidebar.svelte';
 	import {
 		createGtmLoopTaskArtifacts,
+		createGtmLoopTaskApproval,
+		decideGtmLoopApproval,
 		getGtmLoopTaskAudit,
+		getGtmLoopTaskApprovals,
 		getGtmLoopTasks,
 		transitionGtmLoopTask,
 		updateGtmLoopTaskStatus,
+		type GtmLoopApproval,
+		type GtmLoopApprovalCreate,
+		type GtmLoopApprovalRisk,
+		type GtmLoopApprovalStatus,
+		type GtmLoopApprovalType,
 		type GtmLoopArtifactLane,
 		type GtmLoopTaskAuditEntry,
 		type GtmLoopBoardStatus,
@@ -51,12 +59,48 @@
 		verifier: { lane: 'verification', label: 'Create verification artifacts' },
 		reporter: { lane: 'report', label: 'Create report artifacts' }
 	} satisfies Record<string, { lane: GtmLoopArtifactLane; label: string }>;
+	const approvalTypeOptions = [
+		'n8n_workflow_create_update',
+		'n8n_workflow_activation',
+		'hubspot_write',
+		'gong_write',
+		'airops_write',
+		'external_webhook_exposure',
+		'email_send',
+		'credential_change',
+		'dependency_install',
+		'destructive_command',
+		'production_data_use',
+		'client_visible_deliverable',
+		'scheduled_loop'
+	] satisfies GtmLoopApprovalType[];
+	const approvalRiskOptions = ['low', 'medium', 'high', 'critical'] satisfies GtmLoopApprovalRisk[];
+	const approvalDecisionOptions = ['approved', 'rejected', 'deferred', 'cancelled'] satisfies Exclude<
+		GtmLoopApprovalStatus,
+		'requested'
+	>[];
 
 	type ApiState = 'loading' | 'loaded' | 'unauthorized' | 'error';
 	type AuditState = {
 		state: 'idle' | 'loading' | 'loaded' | 'error';
 		entries: GtmLoopTaskAuditEntry[];
 		error?: string;
+	};
+	type ApprovalState = {
+		state: 'idle' | 'loading' | 'loaded' | 'error';
+		approvals: GtmLoopApproval[];
+		error?: string;
+	};
+	type ApprovalDraft = {
+		type: GtmLoopApprovalType;
+		title: string;
+		requested_action: string;
+		system: string;
+		risk: GtmLoopApprovalRisk;
+		evidence_links: string;
+		artifact_links: string;
+		rollback_plan: string;
+		notes: string;
 	};
 
 	let tasks: GtmLoopTask[] = [];
@@ -82,6 +126,9 @@
 	let draggingTaskId = '';
 	let dragOverStatus = '';
 	let auditByTaskId: Record<string, AuditState> = {};
+	let approvalsByTaskId: Record<string, ApprovalState> = {};
+	let approvalNotesById: Record<string, string> = {};
+	let approvalDraftsByTaskId: Record<string, ApprovalDraft> = {};
 
 	type StringFilterField =
 		| 'client'
@@ -202,6 +249,27 @@
 	const asList = (value: string[] | null | undefined) => value ?? [];
 	const textOrFallback = (value: string | null | undefined, fallback = 'None recorded.') =>
 		value && value.trim() ? value : fallback;
+	const splitLinks = (value: string) =>
+		value
+			.split(/[\n,]/)
+			.map((link) => link.trim())
+			.filter(Boolean);
+	const newApprovalDraft = (task: GtmLoopTask): ApprovalDraft => ({
+		type: 'n8n_workflow_activation',
+		title: `Approve action for ${task.id}`,
+		requested_action: '',
+		system: 'n8n',
+		risk: 'high',
+		evidence_links: '',
+		artifact_links: asList(task.artifact_links).join('\n'),
+		rollback_plan: '',
+		notes: ''
+	});
+	const getApprovalDraft = (task: GtmLoopTask) =>
+		approvalDraftsByTaskId[task.id] ?? newApprovalDraft(task);
+	const setApprovalDraft = (task: GtmLoopTask, draft: ApprovalDraft) => {
+		approvalDraftsByTaskId = { ...approvalDraftsByTaskId, [task.id]: draft };
+	};
 	const getTaskTransitions = (task: GtmLoopTask) =>
 		transitionOptions.filter(({ key }) => {
 			if (task.board_status === 'done' || task.board_status === 'cancelled') return false;
@@ -210,6 +278,8 @@
 			if (key === 'mark-done') {
 				return (
 					!task.blocked &&
+					!task.rework_needed &&
+					(!task.approval_required || task.approval_status === 'approved') &&
 					(task.current_lane === 'reporter' ||
 						task.current_lane === 'manager' ||
 						task.board_status === 'in-review')
@@ -218,6 +288,33 @@
 			return key !== 'pick-up';
 		});
 	const getLaneArtifactOption = (task: GtmLoopTask) => laneArtifactOptions[task.current_lane];
+
+	const loadTaskApprovals = async (taskId: string, force = false) => {
+		const current = approvalsByTaskId[taskId];
+		if (!force && (current?.state === 'loading' || current?.state === 'loaded')) return;
+
+		approvalsByTaskId = {
+			...approvalsByTaskId,
+			[taskId]: { state: 'loading', approvals: current?.approvals ?? [] }
+		};
+
+		try {
+			const response = await getGtmLoopTaskApprovals(localStorage.token ?? '', taskId);
+			approvalsByTaskId = {
+				...approvalsByTaskId,
+				[taskId]: { state: 'loaded', approvals: response.approvals ?? [] }
+			};
+		} catch (err) {
+			approvalsByTaskId = {
+				...approvalsByTaskId,
+				[taskId]: {
+					state: 'error',
+					approvals: current?.approvals ?? [],
+					error: getErrorDetail(err)
+				}
+			};
+		}
+	};
 
 	const loadTaskAudit = async (taskId: string, force = false) => {
 		const current = auditByTaskId[taskId];
@@ -341,6 +438,66 @@
 				toast.success(`Created ${created} ${formatLabel(option.lane)} artifact${created === 1 ? '' : 's'} for ${task.id}.`);
 			} else if (skipped > 0) {
 				toast.warning(`${formatLabel(option.lane)} artifacts already exist for ${task.id}; no files overwritten.`);
+			}
+		} catch (err) {
+			toast.error(getErrorDetail(err));
+		} finally {
+			updatingTaskId = '';
+		}
+	};
+
+	const createApprovalRequest = async (task: GtmLoopTask) => {
+		const draft = getApprovalDraft(task);
+		const payload: GtmLoopApprovalCreate = {
+			type: draft.type,
+			title: draft.title,
+			requested_action: draft.requested_action,
+			system: draft.system,
+			risk: draft.risk,
+			evidence_links: splitLinks(draft.evidence_links),
+			artifact_links: splitLinks(draft.artifact_links),
+			rollback_plan: draft.rollback_plan,
+			notes: draft.notes
+		};
+
+		updatingTaskId = task.id;
+		try {
+			const response = await createGtmLoopTaskApproval(localStorage.token ?? '', task.id, payload);
+			await loadTasks();
+			await loadTaskApprovals(task.id, true);
+			setApprovalDraft(task, newApprovalDraft(task));
+			if (response.audit_warning) {
+				toast.warning(`${response.approval.approval_id} requested; ${response.audit_warning}`);
+			} else {
+				toast.success(`Requested ${response.approval.approval_id} for ${task.id}.`);
+			}
+		} catch (err) {
+			toast.error(getErrorDetail(err));
+		} finally {
+			updatingTaskId = '';
+		}
+	};
+
+	const decideApproval = async (
+		task: GtmLoopTask,
+		approval: GtmLoopApproval,
+		status: Exclude<GtmLoopApprovalStatus, 'requested'>
+	) => {
+		updatingTaskId = task.id;
+		try {
+			const response = await decideGtmLoopApproval(
+				localStorage.token ?? '',
+				approval.approval_id,
+				status,
+				approvalNotesById[approval.approval_id] ?? ''
+			);
+			await loadTasks();
+			await loadTaskApprovals(task.id, true);
+			approvalNotesById = { ...approvalNotesById, [approval.approval_id]: '' };
+			if (response.audit_warning) {
+				toast.warning(`${approval.approval_id} ${formatLabel(status)}; ${response.audit_warning}`);
+			} else {
+				toast.success(`${approval.approval_id} ${formatLabel(status)}.`);
 			}
 		} catch (err) {
 			toast.error(getErrorDetail(err));
@@ -827,6 +984,7 @@
 											on:toggle={(event) => {
 												if ((event.currentTarget as HTMLDetailsElement).open) {
 													loadTaskAudit(task.id);
+													loadTaskApprovals(task.id);
 												}
 											}}
 										>
@@ -890,6 +1048,259 @@
 														</div>
 													</div>
 												{/if}
+
+												<div>
+													<div class="font-medium text-gray-500">Approvals</div>
+													<div class="mt-1 text-gray-500">
+														Local approval records only. Decisions do not execute external actions.
+													</div>
+
+													{#if approvalsByTaskId[task.id]?.state === 'loading'}
+														<div class="mt-2 rounded bg-gray-50 px-2 py-2 dark:bg-gray-850">
+															Loading approvals...
+														</div>
+													{:else if approvalsByTaskId[task.id]?.state === 'error'}
+														<div class="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-2 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+															{approvalsByTaskId[task.id]?.error}
+														</div>
+													{:else if (approvalsByTaskId[task.id]?.approvals?.length ?? 0) === 0}
+														<div class="mt-2 rounded bg-gray-50 px-2 py-2 text-gray-500 dark:bg-gray-850">
+															No approvals requested yet.
+														</div>
+													{:else}
+														<div class="mt-2 space-y-2">
+															{#each approvalsByTaskId[task.id]?.approvals ?? [] as approval}
+																<div class="rounded bg-gray-50 px-2 py-2 dark:bg-gray-850">
+																	<div class="flex flex-wrap items-start justify-between gap-2">
+																		<div>
+																			<div class="font-mono text-[11px] text-gray-500">
+																				{approval.approval_id}
+																			</div>
+																			<div class="mt-1 font-medium">{approval.title}</div>
+																		</div>
+																		<div class="flex flex-wrap gap-1">
+																			<span class="rounded bg-white px-2 py-1 text-[11px] dark:bg-gray-900">
+																				{formatLabel(approval.status)}
+																			</span>
+																			<span class="rounded bg-white px-2 py-1 text-[11px] dark:bg-gray-900">
+																				{formatLabel(approval.risk)}
+																			</span>
+																		</div>
+																	</div>
+																	<div class="mt-2 grid gap-2 sm:grid-cols-2">
+																		<div>
+																			<div class="font-medium text-gray-500">Type</div>
+																			<div class="mt-1">{formatLabel(approval.type)}</div>
+																		</div>
+																		<div>
+																			<div class="font-medium text-gray-500">System</div>
+																			<div class="mt-1">{textOrFallback(approval.system)}</div>
+																		</div>
+																		<div>
+																			<div class="font-medium text-gray-500">Requested by</div>
+																			<div class="mt-1">{textOrFallback(approval.requested_by)}</div>
+																		</div>
+																		<div>
+																			<div class="font-medium text-gray-500">Decided by</div>
+																			<div class="mt-1">{textOrFallback(approval.decided_by)}</div>
+																		</div>
+																	</div>
+																	<div class="mt-2">
+																		<div class="font-medium text-gray-500">Requested action</div>
+																		<div class="mt-1">{textOrFallback(approval.requested_action)}</div>
+																	</div>
+																	<div class="mt-2">
+																		<div class="font-medium text-gray-500">Evidence links</div>
+																		{#if asList(approval.evidence_links).length}
+																			<div class="mt-1 space-y-1">
+																				{#each asList(approval.evidence_links) as link}
+																					<div class="break-all font-mono">{link}</div>
+																				{/each}
+																			</div>
+																		{:else}
+																			<div class="mt-1">None recorded.</div>
+																		{/if}
+																	</div>
+																	<div class="mt-2">
+																		<div class="font-medium text-gray-500">Artifact links</div>
+																		{#if asList(approval.artifact_links).length}
+																			<div class="mt-1 space-y-1">
+																				{#each asList(approval.artifact_links) as link}
+																					<div class="break-all font-mono">{link}</div>
+																				{/each}
+																			</div>
+																		{:else}
+																			<div class="mt-1">None recorded.</div>
+																		{/if}
+																	</div>
+																	<div class="mt-2">
+																		<div class="font-medium text-gray-500">Rollback plan</div>
+																		<div class="mt-1">{textOrFallback(approval.rollback_plan)}</div>
+																	</div>
+																	<div class="mt-2">
+																		<div class="font-medium text-gray-500">Notes</div>
+																		<div class="mt-1">{textOrFallback(approval.notes)}</div>
+																	</div>
+
+																	<div class="mt-3">
+																		<label>
+																			<div class="mb-1 font-medium text-gray-500">Decision note</div>
+																			<input
+																				class="w-full rounded-lg border border-gray-100 bg-white px-2 py-1.5 text-xs outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100"
+																				type="text"
+																				value={approvalNotesById[approval.approval_id] ?? ''}
+																				placeholder="Optional short note"
+																				on:input={(event) =>
+																					(approvalNotesById = {
+																						...approvalNotesById,
+																						[approval.approval_id]: (
+																							event.currentTarget as HTMLInputElement
+																						).value
+																					})}
+																			/>
+																		</label>
+																		<div class="mt-2 flex flex-wrap gap-1.5">
+																			{#each approvalDecisionOptions as decision}
+																				<button
+																					type="button"
+																					class="rounded-lg bg-gray-100 px-2.5 py-1.5 text-xs font-medium text-gray-800 transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+																					disabled={updatingTaskId === task.id}
+																					on:click={() => decideApproval(task, approval, decision)}
+																				>
+																					{formatLabel(decision)}
+																				</button>
+																			{/each}
+																		</div>
+																	</div>
+																</div>
+															{/each}
+														</div>
+													{/if}
+
+													<div class="mt-3 rounded border border-gray-100 bg-gray-50 px-2 py-2 dark:border-gray-800 dark:bg-gray-850">
+														<div class="font-medium text-gray-500">Request approval</div>
+														<div class="mt-2 grid gap-2 sm:grid-cols-2">
+															<label>
+																<div class="mb-1 text-gray-500">Type</div>
+																<select
+																	class="w-full rounded-lg border border-gray-100 bg-white px-2 py-1.5 text-xs outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100"
+																	value={getApprovalDraft(task).type}
+																	on:change={(event) =>
+																		setApprovalDraft(task, {
+																			...getApprovalDraft(task),
+																			type: (event.currentTarget as HTMLSelectElement)
+																				.value as GtmLoopApprovalType
+																		})}
+																>
+																	{#each approvalTypeOptions as option}
+																		<option value={option}>{formatLabel(option)}</option>
+																	{/each}
+																</select>
+															</label>
+															<label>
+																<div class="mb-1 text-gray-500">Risk</div>
+																<select
+																	class="w-full rounded-lg border border-gray-100 bg-white px-2 py-1.5 text-xs outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100"
+																	value={getApprovalDraft(task).risk}
+																	on:change={(event) =>
+																		setApprovalDraft(task, {
+																			...getApprovalDraft(task),
+																			risk: (event.currentTarget as HTMLSelectElement)
+																				.value as GtmLoopApprovalRisk
+																		})}
+																>
+																	{#each approvalRiskOptions as option}
+																		<option value={option}>{formatLabel(option)}</option>
+																	{/each}
+																</select>
+															</label>
+															<label>
+																<div class="mb-1 text-gray-500">Title</div>
+																<input
+																	class="w-full rounded-lg border border-gray-100 bg-white px-2 py-1.5 text-xs outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100"
+																	type="text"
+																	value={getApprovalDraft(task).title}
+																	on:input={(event) =>
+																		setApprovalDraft(task, {
+																			...getApprovalDraft(task),
+																			title: (event.currentTarget as HTMLInputElement).value
+																		})}
+																/>
+															</label>
+															<label>
+																<div class="mb-1 text-gray-500">System</div>
+																<input
+																	class="w-full rounded-lg border border-gray-100 bg-white px-2 py-1.5 text-xs outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100"
+																	type="text"
+																	value={getApprovalDraft(task).system}
+																	on:input={(event) =>
+																		setApprovalDraft(task, {
+																			...getApprovalDraft(task),
+																			system: (event.currentTarget as HTMLInputElement).value
+																		})}
+																/>
+															</label>
+														</div>
+														<label class="mt-2 block">
+															<div class="mb-1 text-gray-500">Requested action</div>
+															<textarea
+																class="min-h-16 w-full rounded-lg border border-gray-100 bg-white px-2 py-1.5 text-xs outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100"
+																value={getApprovalDraft(task).requested_action}
+																placeholder="Exact future action this approval would unlock"
+																on:input={(event) =>
+																	setApprovalDraft(task, {
+																		...getApprovalDraft(task),
+																		requested_action: (event.currentTarget as HTMLTextAreaElement).value
+																	})}
+															/>
+														</label>
+														<label class="mt-2 block">
+															<div class="mb-1 text-gray-500">Artifact links</div>
+															<textarea
+																class="min-h-16 w-full rounded-lg border border-gray-100 bg-white px-2 py-1.5 font-mono text-xs outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100"
+																value={getApprovalDraft(task).artifact_links}
+																on:input={(event) =>
+																	setApprovalDraft(task, {
+																		...getApprovalDraft(task),
+																		artifact_links: (event.currentTarget as HTMLTextAreaElement).value
+																	})}
+															/>
+														</label>
+														<label class="mt-2 block">
+															<div class="mb-1 text-gray-500">Rollback plan</div>
+															<textarea
+																class="min-h-16 w-full rounded-lg border border-gray-100 bg-white px-2 py-1.5 text-xs outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100"
+																value={getApprovalDraft(task).rollback_plan}
+																on:input={(event) =>
+																	setApprovalDraft(task, {
+																		...getApprovalDraft(task),
+																		rollback_plan: (event.currentTarget as HTMLTextAreaElement).value
+																	})}
+															/>
+														</label>
+														<label class="mt-2 block">
+															<div class="mb-1 text-gray-500">Notes</div>
+															<input
+																class="w-full rounded-lg border border-gray-100 bg-white px-2 py-1.5 text-xs outline-none dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100"
+																type="text"
+																value={getApprovalDraft(task).notes}
+																on:input={(event) =>
+																	setApprovalDraft(task, {
+																		...getApprovalDraft(task),
+																		notes: (event.currentTarget as HTMLInputElement).value
+																	})}
+															/>
+														</label>
+														<button
+															type="button"
+															class="mt-2 rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-black dark:hover:bg-gray-200"
+															disabled={updatingTaskId === task.id || !(approvalDraftsByTaskId[task.id]?.requested_action ?? '').trim()}
+															on:click={() => createApprovalRequest(task)}
+														>
+															Request approval
+														</button>
+													</div>
+												</div>
 
 												<div>
 													<div class="font-medium text-gray-500">Manager request</div>

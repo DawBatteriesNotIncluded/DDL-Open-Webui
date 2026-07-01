@@ -4,7 +4,11 @@
 	import { WEBUI_NAME, mobile, showSidebar } from '$lib/stores';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import SidebarIcon from '$lib/components/icons/Sidebar.svelte';
-	import { getGtmLoopTasks, type GtmLoopTasksResponse } from '$lib/apis/gtm-loop';
+	import {
+		getGtmLoopApprovals,
+		getGtmLoopTasks,
+		type GtmLoopTasksResponse
+	} from '$lib/apis/gtm-loop';
 
 	const i18n = getContext('i18n');
 
@@ -28,7 +32,15 @@
 		{ label: 'Approval required', value: '...' },
 		{ label: 'Source mode', value: '...' }
 	];
+	let approvalSummaryRows = [
+		{ label: 'Requested', value: '...' },
+		{ label: 'Approved', value: '...' },
+		{ label: 'Rejected', value: '...' },
+		{ label: 'Deferred', value: '...' },
+		{ label: 'High/Critical requested', value: '...' }
+	];
 	let taskSummaryError = '';
+	let approvalSummaryError = '';
 
 	const nextActions = [
 		'Confirm the first real client and initial automation objective.',
@@ -101,6 +113,22 @@ Do not write to external systems or activate workflows without explicit approval
 				typeof err === 'object' && err && 'detail' in err
 					? String(err.detail)
 					: 'Unable to load GTM Loop task summary.';
+		}
+
+		try {
+			const approvals = await getGtmLoopApprovals(localStorage.token);
+			approvalSummaryRows = [
+				{ label: 'Requested', value: approvals.counts.requested.toString() },
+				{ label: 'Approved', value: approvals.counts.approved.toString() },
+				{ label: 'Rejected', value: approvals.counts.rejected.toString() },
+				{ label: 'Deferred', value: approvals.counts.deferred.toString() },
+				{ label: 'High/Critical requested', value: approvals.counts.critical_high_requested.toString() }
+			];
+		} catch (err) {
+			approvalSummaryError =
+				typeof err === 'object' && err && 'detail' in err
+					? String(err.detail)
+					: 'Unable to load GTM Loop approval summary.';
 		}
 	});
 </script>
@@ -193,6 +221,33 @@ Do not write to external systems or activate workflows without explicit approval
 				{#if taskSummaryError}
 					<div class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
 						{$i18n.t(taskSummaryError)}
+					</div>
+				{/if}
+			</section>
+
+			<section
+				class="rounded-2xl border border-gray-100 bg-white p-4 dark:border-gray-850 dark:bg-gray-900"
+			>
+				<div class="mb-3 text-sm font-medium text-gray-900 dark:text-gray-100">
+					{$i18n.t('Approval Queue')}
+				</div>
+
+				<div class="grid gap-2 md:grid-cols-3 xl:grid-cols-5">
+					{#each approvalSummaryRows as row}
+						<div class="rounded-lg bg-gray-50 px-3 py-2 dark:bg-gray-850">
+							<div class="text-xs text-gray-500">{$i18n.t(row.label)}</div>
+							<div class="mt-0.5 text-sm font-medium text-gray-900 dark:text-gray-100">
+								{$i18n.t(row.value)}
+							</div>
+						</div>
+					{/each}
+				</div>
+				<div class="mt-3 text-xs text-gray-500">
+					{$i18n.t('Approvals record manager intent only. They do not execute workflows, external writes, sends, or credential changes.')}
+				</div>
+				{#if approvalSummaryError}
+					<div class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+						{$i18n.t(approvalSummaryError)}
 					</div>
 				{/if}
 			</section>

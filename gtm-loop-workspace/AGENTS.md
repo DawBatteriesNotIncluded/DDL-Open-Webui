@@ -51,8 +51,11 @@ For issue solving, architecture, or build work:
 - Status moves may update only `board_status` and `last_updated`.
 - Drag/drop is a status move only. It must use the status endpoint, must not mutate lane/phase/gate, and must keep the existing audit behavior.
 - Moving a task to Done through status movement is blocked unless the task is unblocked, does not need rework, has required approval approved, and is already in reporter/manager review state.
+- Requested or deferred approval records under `tasks/_approvals/` also block Done, even if task frontmatter is stale.
 - Orchestrator transitions may update only the required safe task frontmatter fields: `board_status`, `current_lane`, `current_phase`, `current_gate`, `next_action`, `manager_summary`, `rework_needed`, `current_attempt`, `blocked`, and `last_updated`.
 - Lane artifact creation may write only deterministic local Markdown starters under `artifacts/<task-id>/` and may update only `artifact_links` plus `last_updated` in task frontmatter.
+- Approval requests and decisions may write only `tasks/_approvals/APP-####.json`, task approval summary frontmatter, and `tasks/_audit/approval-events.jsonl`.
+- Approval records are intent records only. An approved record does not execute the action; future executor code must check for a matching approved approval before any tool call.
 - Status and transition changes append local JSONL audit entries under `tasks/_audit/status-changes.jsonl`; this is task-local transition audit, not the main run ledger.
 - n8n MCP is a Cody/build-lane draft executor surface only. Agents may draft local specs, draft JSON, and fake payload validation notes, but must not create, update, activate, or run live n8n workflows without explicit approval for the exact action.
 - Full card editing, body editing, evidence editing, credentials, external systems, drag/drop lane transitions, and workflow activation remain blocked.
@@ -64,6 +67,7 @@ For issue solving, architecture, or build work:
 - Local settings prove key names only, not production values.
 - Gong transcripts, CRM data, customer strategy, and workflow payloads are sensitive. Summarize and redact.
 - Human approval is required before external writes, CRM changes, workflow activation, email/send actions, or commercial decisions.
+- Use local approval records for exact risky actions. Do not treat chat approval, a task flag, or a board move as enough for future live tool execution.
 
 ## Do Not Automate Yet
 
@@ -77,6 +81,8 @@ For v1, agents may plan, draft, validate, and prepare approval requests, but mus
 - destructive filesystem, container, database, or environment operations.
 
 Task validation must pass before connecting any executor, MCP write path, or external automation surface.
+
+Local approval records are allowed in v1 because they do not execute actions. Store one approval per exact future action under `tasks/_approvals/APP-####.json`, and audit requests/decisions in `tasks/_audit/approval-events.jsonl`. New approvals must start as `requested`; `approved`, `rejected`, and `cancelled` are terminal decision states. Reject, defer, and cancelled approvals keep execution blocked unless a later exact approval is requested and approved.
 
 ## Investigation Standard
 
