@@ -15,6 +15,7 @@ router = APIRouter()
 REPO_ROOT = Path(__file__).resolve().parents[3]
 TASKS_DIR = REPO_ROOT / 'gtm-loop-workspace' / 'tasks'
 ARTIFACTS_DIR = REPO_ROOT / 'gtm-loop-workspace' / 'artifacts'
+PAYLOADS_N8N_DIR = REPO_ROOT / 'gtm-loop-workspace' / 'payloads' / 'n8n'
 APPROVALS_DIR = TASKS_DIR / '_approvals'
 STATUS_AUDIT_LOG = TASKS_DIR / '_audit' / 'status-changes.jsonl'
 ARTIFACT_AUDIT_LOG = TASKS_DIR / '_audit' / 'artifact-events.jsonl'
@@ -731,6 +732,23 @@ def artifact_link_for(task_id: str, lane: str, filename: str) -> str:
     return f'gtm-loop-workspace/artifacts/{task_id}/{lane}/{filename}'
 
 
+def markdown_list(values: list[str]) -> str:
+    return '\n'.join(f'- `{value}`' for value in values) if values else '- TBD'
+
+
+def n8n_payload_links() -> tuple[list[str], list[str]]:
+    try:
+        links = [
+            f'gtm-loop-workspace/payloads/n8n/{path.name}'
+            for path in sorted(PAYLOADS_N8N_DIR.glob('*.json'))
+        ]
+    except OSError:
+        links = []
+    outputs = [link for link in links if any(marker in link for marker in ['response', 'result'])]
+    inputs = [link for link in links if link not in outputs]
+    return inputs, outputs
+
+
 def render_artifact(task: dict, lane: str, filename: str, timestamp: str) -> str:
     title = filename.removesuffix('.md').replace('-', ' ').title()
     template_path = ARTIFACTS_DIR / '_templates' / lane / filename
@@ -764,6 +782,54 @@ def render_artifact(task: dict, lane: str, filename: str, timestamp: str) -> str
         ),
         'generated_at': timestamp,
     }
+    fake_input_payloads, fake_output_payloads = n8n_payload_links()
+    values['proposed_workflow_name'] = (
+        f"{values['task_id'].lower()}-{values['client'].lower().replace(' ', '-')}-draft"
+        if values['client']
+        else f"{values['task_id'].lower()}-n8n-draft"
+    )
+    values['trigger'] = (
+        "Draft-only trigger. Use a fake/redacted webhook input payload; do not expose or call a live webhook."
+    )
+    values['node_outline'] = (
+        "| Step | Draft node | Purpose | External write? |\n"
+        "| --- | --- | --- | --- |\n"
+        "| 1 | Webhook / Manual Test Trigger | Accept fake payload only. | No |\n"
+        "| 2 | Set / Code | Normalize fields and remove sensitive values. | No |\n"
+        "| 3 | IF | Route missing required fields to a local error branch. | No |\n"
+        "| 4 | Respond / No-op | Return fake validation output. | No |"
+    )
+    values['fake_input_payload_links'] = markdown_list(fake_input_payloads)
+    values['fake_output_payload_links'] = markdown_list(fake_output_payloads)
+    values['data_mapping'] = (
+        "- Source fields: list only fake/redacted input fields.\n"
+        "- Normalized fields: map names, types, and required/optional status.\n"
+        "- Output fields: describe fake result shape only.\n"
+        "- Field owners: reference requirements or architecture artifacts when known."
+    )
+    values['error_handling'] = (
+        "- Validate required fields before any draft output.\n"
+        "- Route invalid fake payloads to a local error response.\n"
+        "- Do not retry production webhooks or external writes.\n"
+        "- Record unresolved mapping questions in the task artifacts."
+    )
+    values['validation_plan'] = (
+        "1. Test only with fake/redacted payloads from `gtm-loop-workspace/payloads/n8n/`.\n"
+        "2. Confirm the draft has no credentials, production URLs, or customer records.\n"
+        "3. Confirm every external-write node is absent or disabled in the draft.\n"
+        "4. Capture fake output in validation notes before requesting approval."
+    )
+    values['rollback_disable_plan'] = (
+        "- Markdown draft only: no runtime rollback is required.\n"
+        "- Before any future n8n activation, document how to disable the workflow, remove triggers, and stop schedules."
+    )
+    values['explicit_blocked_actions'] = (
+        "- Calling n8n MCP.\n"
+        "- Creating, updating, or activating a real n8n workflow.\n"
+        "- Calling production webhooks.\n"
+        "- Using real credentials, tokens, headers, tenant IDs, or customer data.\n"
+        "- Writing to HubSpot, Gong, AirOps, custom APIs, email, or external systems."
+    )
     values['task_context'] = (
         f"| Field | Value |\n"
         f"| --- | --- |\n"
@@ -786,7 +852,13 @@ def render_artifact(task: dict, lane: str, filename: str, timestamp: str) -> str
     return template.rstrip() + '\n'
 
 
-def update_task_artifact_links(file_path: Path, artifact_links: list[str]) -> tuple[dict, str]:
+def update_task_artifact_links(
+    file_path: Path,
+    artifact_links: list[str],
+    *,
+    next_action: str | None = None,
+    manager_summary: str | None = None,
+) -> tuple[dict, str]:
     text = file_path.read_text(encoding='utf-8')
     match = re.match(r'^(---\r?\n)(?P<frontmatter>.*?)(\r?\n---\r?\n)(?P<body>.*)$', text, re.DOTALL)
     if not match:
@@ -800,6 +872,10 @@ def update_task_artifact_links(file_path: Path, artifact_links: list[str]) -> tu
 
     timestamp = now_iso()
     frontmatter = replace_frontmatter_field(match.group('frontmatter'), 'artifact_links', yaml_list(links))
+    if next_action is not None:
+        frontmatter = replace_frontmatter_field(frontmatter, 'next_action', next_action)
+    if manager_summary is not None:
+        frontmatter = replace_frontmatter_field(frontmatter, 'manager_summary', manager_summary)
     frontmatter = replace_frontmatter_field(frontmatter, 'last_updated', timestamp)
     updated_text = f"{match.group(1)}{frontmatter}{match.group(3)}{match.group('body')}"
 
@@ -816,6 +892,10 @@ def update_task_artifact_links(file_path: Path, artifact_links: list[str]) -> tu
         raise HTTPException(status_code=500, detail='Task artifact update failed validation.')
     if any(link not in (task.get('artifact_links') or []) for link in artifact_links):
         raise HTTPException(status_code=500, detail='Task artifact links failed validation.')
+    if next_action is not None and task.get('next_action') != next_action:
+        raise HTTPException(status_code=500, detail='Task next action update failed validation.')
+    if manager_summary is not None and task.get('manager_summary') != manager_summary:
+        raise HTTPException(status_code=500, detail='Task manager summary update failed validation.')
     return task, timestamp
 
 
@@ -854,6 +934,55 @@ def create_task_lane_artifacts(
         created.append(link)
 
     updated_task, update_timestamp = update_task_artifact_links(file_path, links)
+    return updated_task, created, skipped, update_timestamp
+
+
+def create_task_n8n_draft(
+    file_path: Path,
+    overwrite: bool,
+) -> tuple[dict, list[str], list[str], str]:
+    task = read_task(file_path)
+    task_id = str(task.get('id') or file_path.stem)
+    is_build_lane = (
+        str(task.get('current_lane') or '').lower() == 'cody'
+        or str(task.get('current_phase') or '').lower() == 'build'
+        or (
+            str(task.get('board_status') or '') == 'in-progress'
+            and str(task.get('current_gate') or '') == 'build-complete'
+        )
+    )
+    if not is_build_lane:
+        raise HTTPException(
+            status_code=400,
+            detail='n8n workflow drafts are only available for Cody/build-lane tasks.',
+        )
+
+    filename = 'n8n-workflow-draft.md'
+    target = artifact_path_for(task_id, 'build', filename)
+    link = artifact_link_for(task_id, 'build', filename)
+    timestamp = now_iso()
+    created = []
+    skipped = []
+
+    if target.exists() and not overwrite:
+        skipped.append(link)
+    else:
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(render_artifact(task, 'build', filename, timestamp), encoding='utf-8')
+        except OSError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail='Artifact path is not writable. In local dev, mount gtm-loop-workspace/artifacts as writable.',
+            ) from exc
+        created.append(link)
+
+    updated_task, update_timestamp = update_task_artifact_links(
+        file_path,
+        [link],
+        next_action='Review the local n8n workflow draft and request approval before any n8n MCP or live workflow action.',
+        manager_summary='Local n8n workflow draft artifact is ready; no n8n MCP or external systems were called.',
+    )
     return updated_task, created, skipped, update_timestamp
 
 
@@ -1148,6 +1277,37 @@ async def create_gtm_loop_task_artifacts(
             'actor': actor_from_user(user),
             'source': '/gtm-loop/board',
             'endpoint': 'POST /api/gtm-loop/tasks/{task_id}/artifacts/{lane}',
+            'success': True,
+        }
+    )
+    task['files_created'] = created
+    task['files_skipped'] = skipped
+    task['audit_logged'] = audit_warning is None
+    if audit_warning:
+        task['audit_warning'] = audit_warning
+    return task
+
+
+@router.post('/tasks/{task_id}/n8n-draft')
+async def create_gtm_loop_task_n8n_draft(
+    task_id: str,
+    payload: TaskArtifactCreate | None = None,
+    user=Depends(get_verified_user),
+):
+    file_path = task_file_for_id(task_id)
+    overwrite = payload.overwrite if payload else False
+    task, created, skipped, timestamp = create_task_n8n_draft(file_path, overwrite)
+    audit_warning = append_artifact_audit_entry(
+        {
+            'timestamp': timestamp,
+            'task_id': task_id,
+            'lane': 'build',
+            'artifact_type': 'n8n-workflow-draft',
+            'files_created': created,
+            'files_skipped': skipped,
+            'actor': actor_from_user(user),
+            'source': '/gtm-loop/board',
+            'endpoint': 'POST /api/gtm-loop/tasks/{task_id}/n8n-draft',
             'success': True,
         }
     )

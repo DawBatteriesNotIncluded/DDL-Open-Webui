@@ -32,6 +32,8 @@ Use it as a Cody/build executor surface for planning and local draft artifacts o
 - Validate draft logic against fake/redacted payloads.
 - Prepare an approval request for any future live workflow action.
 
+`/gtm-loop/board` can create `artifacts/<task_id>/build/n8n-workflow-draft.md` for Cody/build tasks through a local file-only endpoint. That action does not call n8n MCP and does not create, update, activate, or run any workflow.
+
 ## Blocked Without Explicit Approval
 
 - Activate, enable, disable, or retry any production workflow.
@@ -72,7 +74,7 @@ Do not paste real webhook bodies, CRM records, Gong transcript text, auth header
 2. Open the task in `/gtm-loop/board`.
 3. Move the task to Cody/build lane if needed.
 4. Create or use build artifacts under `artifacts/<task_id>/build/`.
-5. Draft `n8n-workflow-draft.md` from the template.
+5. Draft `n8n-workflow-draft.md` from the template or use the board's local draft button.
 6. Validate only against fake payloads in `payloads/n8n/`.
 7. Prepare an approval request before any real n8n write, trigger, activation, or webhook call.
 

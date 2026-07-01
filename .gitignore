@@ -26,6 +26,9 @@ static/pyodide/*
 # Distribution / packaging
 .Python
 build/
+!gtm-loop-workspace/artifacts/**/build/
+gtm-loop-workspace/artifacts/**/build/*
+!gtm-loop-workspace/artifacts/**/build/n8n-workflow-draft.md
 develop-eggs/
 dist/
 downloads/

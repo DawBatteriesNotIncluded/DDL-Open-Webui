@@ -54,6 +54,7 @@ For issue solving, architecture, or build work:
 - Requested or deferred approval records under `tasks/_approvals/` also block Done, even if task frontmatter is stale.
 - Orchestrator transitions may update only the required safe task frontmatter fields: `board_status`, `current_lane`, `current_phase`, `current_gate`, `next_action`, `manager_summary`, `rework_needed`, `current_attempt`, `blocked`, and `last_updated`.
 - Lane artifact creation may write only deterministic local Markdown starters under `artifacts/<task-id>/` and may update only `artifact_links` plus `last_updated` in task frontmatter.
+- The n8n workflow draft action is a Cody/build-lane artifact action only. It may create `artifacts/<task-id>/build/n8n-workflow-draft.md`, update task artifact/summary frontmatter, and append artifact audit; it must not call n8n MCP or create/update/activate workflows.
 - Approval requests and decisions may write only `tasks/_approvals/APP-####.json`, task approval summary frontmatter, and `tasks/_audit/approval-events.jsonl`.
 - Approval records are intent records only. An approved record does not execute the action; future executor code must check for a matching approved approval before any tool call.
 - Status and transition changes append local JSONL audit entries under `tasks/_audit/status-changes.jsonl`; this is task-local transition audit, not the main run ledger.
@@ -80,7 +81,7 @@ For v1, agents may plan, draft, validate, and prepare approval requests, but mus
 - credential, token, scope, or API key changes;
 - destructive filesystem, container, database, or environment operations.
 
-Task validation must pass before connecting any executor, MCP write path, or external automation surface.
+Task validation must pass before connecting any executor, MCP write path, or external automation surface. Local n8n draft Markdown creation is allowed without approval because it uses fake/redacted payload links only and executes nothing.
 
 Local approval records are allowed in v1 because they do not execute actions. Store one approval per exact future action under `tasks/_approvals/APP-####.json`, and audit requests/decisions in `tasks/_audit/approval-events.jsonl`. New approvals must start as `requested`; `approved`, `rejected`, and `cancelled` are terminal decision states. Reject, defer, and cancelled approvals keep execution blocked unless a later exact approval is requested and approved.
 

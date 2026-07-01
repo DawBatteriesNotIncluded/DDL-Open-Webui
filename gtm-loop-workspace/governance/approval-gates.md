@@ -24,7 +24,7 @@ Actions requiring explicit human approval before execution.
 | --- | --- |
 | Edit Markdown in this workspace | No secrets or raw customer data. |
 | Draft workflow specs or prompts | No external writes. |
-| Draft local n8n workflow Markdown/JSON | Fake/redacted payloads only; no live workflow mutation or activation. |
+| Draft local n8n workflow Markdown/JSON | Fake/redacted payloads only; no n8n MCP call, live workflow mutation, or activation. |
 | Create fake/redacted payloads | No real customer data. |
 | Inspect local docs/source | Read-only and within allowed workspace. |
 | Update board/run ledger | No sensitive values. |
@@ -91,3 +91,5 @@ These stay manual and approval-gated for v1:
 - Uploading raw customer exports, Gong transcripts, logs, secrets, endpoint hosts, tenant IDs, or auth headers to Knowledge.
 
 Agents may draft plans, payloads, approval requests, and validation notes for these actions, but must not execute them without explicit approval for the exact action.
+
+Creating `gtm-loop-workspace/artifacts/<task_id>/build/n8n-workflow-draft.md` from the board is allowed without approval because it is local Markdown only and uses fake/redacted payload links. Any future n8n MCP create/update/activation still requires a matching approved approval record before execution.

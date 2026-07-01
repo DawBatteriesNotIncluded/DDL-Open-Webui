@@ -438,6 +438,36 @@ export const createGtmLoopTaskArtifacts = async (
 	return res.json();
 };
 
+export const createGtmLoopTaskN8nDraft = async (
+	token: string,
+	taskId: string,
+	overwrite: boolean = false
+): Promise<GtmLoopTaskArtifactsResponse> => {
+	const res = await fetch(`${WEBUI_BASE_URL}/api/gtm-loop/tasks/${taskId}/n8n-draft`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		},
+		body: JSON.stringify({ overwrite })
+	});
+
+	if (!res.ok) {
+		let detail = res.statusText || 'Unable to create GTM n8n workflow draft.';
+		try {
+			const body = await res.json();
+			detail = body.detail ?? detail;
+		} catch {
+			// Keep the status text fallback.
+		}
+
+		throw { status: res.status, detail } satisfies GtmLoopApiError;
+	}
+
+	return res.json();
+};
+
 export const getGtmLoopTaskAudit = async (
 	token: string,
 	taskId: string,

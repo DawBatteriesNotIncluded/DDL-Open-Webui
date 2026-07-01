@@ -34,8 +34,10 @@ gtm-loop-workspace/artifacts/_templates/build/n8n-workflow-draft.md
 Task-specific drafts should live under:
 
 ```text
-gtm-loop-workspace/artifacts/<task_id>/build/
+gtm-loop-workspace/artifacts/<task_id>/build/n8n-workflow-draft.md
 ```
+
+The board action `Create n8n workflow draft` creates this Markdown file locally for Cody/build tasks. It does not call n8n MCP, does not create or update a workflow, and does not create an approval record.
 
 ## Blocked Actions
 
@@ -52,7 +54,7 @@ gtm-loop-workspace/artifacts/<task_id>/build/
 1. Confirm the task is in `current_lane: cody`.
 2. Read the requirements, integration flow, build plan, and tool plan.
 3. Select only fake/redacted payloads.
-4. Draft the n8n workflow spec locally.
+4. Draft the n8n workflow spec locally, or create the starter from `/gtm-loop/board`.
 5. Mark every node as `draft`, `mock`, or `approval-gated`.
 6. Record fake payload validation notes.
 7. Prepare an approval request for any live n8n action.

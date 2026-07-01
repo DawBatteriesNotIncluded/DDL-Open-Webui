@@ -37,6 +37,13 @@ Transition rules: `orchestrator/transition-rules.md`
 
 ## In Progress
 
+- [GTM-001](tasks/GTM-001.md) - Onboard first real client
+  - Client: TBD
+  - Lane: Cody
+  - Status: In Progress
+  - Blocked: yes
+  - Next action: Review the local n8n workflow draft and request approval before any n8n MCP or live workflow action.
+
 - [GTM-003](tasks/GTM-003.md) - Confirm tool permissions
   - Client: Global
   - Lane: Brody
@@ -46,12 +53,7 @@ Transition rules: `orchestrator/transition-rules.md`
 
 ## Smoke Test
 
-- [GTM-001](tasks/GTM-001.md) - Onboard first real client
-  - Client: TBD
-  - Lane: Brody
-  - Status: Smoke Test
-  - Blocked: yes
-  - Next action: Run Brody investigation / requirements lane.
+_No active tasks._
 
 ## In Review
 

@@ -6,6 +6,7 @@
 	import SidebarIcon from '$lib/components/icons/Sidebar.svelte';
 	import {
 		createGtmLoopTaskArtifacts,
+		createGtmLoopTaskN8nDraft,
 		createGtmLoopTaskApproval,
 		decideGtmLoopApproval,
 		getGtmLoopTaskAudit,
@@ -247,6 +248,14 @@
 
 	const formatLabel = (value = '') => value.replaceAll('-', ' ') || 'none';
 	const asList = (value: string[] | null | undefined) => value ?? [];
+	const n8nDraftLinkFor = (task: GtmLoopTask) =>
+		`gtm-loop-workspace/artifacts/${task.id}/build/n8n-workflow-draft.md`;
+	const hasN8nDraft = (task: GtmLoopTask) =>
+		asList(task.artifact_links).includes(n8nDraftLinkFor(task));
+	const canCreateN8nDraft = (task: GtmLoopTask) =>
+		task.current_lane === 'cody' ||
+		task.current_phase === 'build' ||
+		(task.board_status === 'in-progress' && task.current_gate === 'build-complete');
 	const textOrFallback = (value: string | null | undefined, fallback = 'None recorded.') =>
 		value && value.trim() ? value : fallback;
 	const splitLinks = (value: string) =>
@@ -438,6 +447,28 @@
 				toast.success(`Created ${created} ${formatLabel(option.lane)} artifact${created === 1 ? '' : 's'} for ${task.id}.`);
 			} else if (skipped > 0) {
 				toast.warning(`${formatLabel(option.lane)} artifacts already exist for ${task.id}; no files overwritten.`);
+			}
+		} catch (err) {
+			toast.error(getErrorDetail(err));
+		} finally {
+			updatingTaskId = '';
+		}
+	};
+
+	const createN8nDraft = async (task: GtmLoopTask) => {
+		updatingTaskId = task.id;
+		try {
+			const updated = await createGtmLoopTaskN8nDraft(localStorage.token ?? '', task.id);
+			await loadTasks();
+
+			const created = updated.files_created?.length ?? 0;
+			const skipped = updated.files_skipped?.length ?? 0;
+			if (updated.audit_warning) {
+				toast.warning(`${task.id} n8n draft updated; ${updated.audit_warning}`);
+			} else if (created > 0) {
+				toast.success(`Created local n8n workflow draft for ${task.id}.`);
+			} else if (skipped > 0) {
+				toast.warning(`n8n workflow draft already exists for ${task.id}; no file overwritten.`);
 			}
 		} catch (err) {
 			toast.error(getErrorDetail(err));
@@ -1045,6 +1076,32 @@
 														</div>
 														<div class="mt-1 text-gray-500">
 															Creates local Markdown starters only. Existing files are skipped.
+														</div>
+													</div>
+												{/if}
+
+												{#if canCreateN8nDraft(task)}
+													<div>
+														<div class="font-medium text-gray-500">n8n workflow draft</div>
+														{#if hasN8nDraft(task)}
+															<div class="mt-1 text-gray-500">n8n workflow draft exists.</div>
+															<div class="mt-1 break-all font-mono text-[11px]">
+																{n8nDraftLinkFor(task)}
+															</div>
+														{:else}
+															<div class="mt-2">
+																<button
+																	type="button"
+																	class="rounded-lg bg-gray-100 px-2.5 py-1.5 text-xs font-medium text-gray-800 transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-gray-850 dark:text-gray-200 dark:hover:bg-gray-800"
+																	disabled={updatingTaskId === task.id}
+																	on:click={() => createN8nDraft(task)}
+																>
+																	Create n8n workflow draft
+																</button>
+															</div>
+														{/if}
+														<div class="mt-1 text-gray-500">
+															Local Markdown draft only. Does not call n8n MCP.
 														</div>
 													</div>
 												{/if}
